@@ -1231,10 +1231,10 @@ export default function App() {
       {/* --- MODAL: IMAGE EXPORT & SLICING --- */}
       {showExportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto transition-all animate-fade-in">
-          <div className="w-full max-w-5xl my-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col md:flex-row max-h-[85vh] overflow-hidden">
+          <div className="w-full max-w-5xl my-4 md:my-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col md:flex-row max-h-[90vh] md:max-h-[85vh] overflow-y-auto md:overflow-hidden">
             
             {/* Modal Configurations Pane (Left) */}
-            <div className="w-full md:w-[350px] p-6 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-850 flex flex-col justify-between overflow-y-auto bg-slate-50/50 dark:bg-slate-900/30 shrink-0">
+            <div className="w-full md:w-[350px] p-6 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-850 flex flex-col justify-between overflow-visible md:overflow-y-auto bg-slate-50/50 dark:bg-slate-900/30 shrink-0">
               <div className="space-y-6">
                 <div>
                   <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -1361,7 +1361,7 @@ export default function App() {
             </div>
 
             {/* Modal Preview Canvas & Downloads Grid (Right) */}
-            <div className="flex-1 p-6 flex flex-col justify-between overflow-hidden bg-slate-100 dark:bg-slate-950">
+            <div className="flex-1 p-6 flex flex-col justify-between overflow-visible md:overflow-hidden bg-slate-100 dark:bg-slate-955">
               
               <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-900 pb-3 flex-wrap gap-3">
                 <div className="flex items-center gap-2">
@@ -1411,7 +1411,7 @@ export default function App() {
               </div>
 
               {/* Slices Preview Grid Area */}
-              <div className="flex-1 my-4 overflow-y-auto min-h-0 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-900 rounded-2xl p-4">
+              <div className="flex-1 my-4 overflow-visible md:overflow-y-auto min-h-[260px] md:min-h-0 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-900 rounded-2xl p-4">
                 {slices.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center p-8">
                     <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/20 text-indigo-500 flex items-center justify-center mb-4">
