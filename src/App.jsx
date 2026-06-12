@@ -121,6 +121,29 @@ const getCharCount = (str) => {
   return str ? str.length : 0;
 };
 
+// Helper to parse headings from markdown text
+const parseHeadings = (md) => {
+  if (!md) return [];
+  const lines = md.split('\n');
+  const headings = [];
+  let headingCount = 0;
+  
+  lines.forEach((line) => {
+    const match = line.match(/^(#{1,6})\s+(.+)$/);
+    if (match) {
+      const level = match[1].length;
+      const text = match[2].trim().replace(/[#*`_~]/g, ''); // strip markdown formatting
+      headingCount++;
+      headings.push({
+        id: `heading-${headingCount}`,
+        level,
+        text
+      });
+    }
+  });
+  return headings;
+};
+
 // Helper to find the first index of difference between two strings
 const findDiffIndex = (oldStr, newStr) => {
   if (!oldStr || !newStr) return 0;
@@ -820,6 +843,53 @@ export default function App() {
     setSelectedSlices(newSelected);
   };
 
+  const handleScrollToHeading = (index) => {
+    const activeRefs = [readingViewRef, leftReadingViewRef, rightReadingViewRef];
+    activeRefs.forEach(ref => {
+      if (ref.current) {
+        const headings = ref.current.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        if (headings[index]) {
+          headings[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
+          
+          headings[index].classList.add('animate-change-highlight');
+          setTimeout(() => {
+            headings[index].classList.remove('animate-change-highlight');
+          }, 2000);
+        }
+      }
+    });
+  };
+
+  const renderParagraphDropdown = () => {
+    const headings = parseHeadings(markdown);
+    if (headings.length === 0) return null;
+
+    return (
+      <div className="flex items-center gap-1 shrink-0 select-none">
+        <select
+          onChange={(e) => {
+            const val = e.target.value;
+            if (val !== "") {
+              handleScrollToHeading(parseInt(val));
+              e.target.value = "";
+            }
+          }}
+          defaultValue=""
+          className="px-2 py-1.5 rounded-lg text-[11px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500/20 text-slate-700 dark:text-slate-200 max-w-[130px] sm:max-w-[160px] truncate"
+        >
+          <option value="" disabled>-- 快速跳至段落 --</option>
+          {headings.map((h, idx) => (
+            <option key={idx} value={idx}>
+              {"\u00a0".repeat((h.level - 1) * 2)}
+              {h.level === 1 ? '📌 ' : h.level === 2 ? '🔹 ' : '▪️ '}
+              {h.text}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  };
+
   // --- Sub-renderer: Layout View Render Mode ---
   function renderWorkspaceContent(paneType, side) {
     const elementRef = side === 'left' ? leftPaneElementRef : (side === 'right' ? rightPaneElementRef : singlePaneElementRef);
@@ -1123,15 +1193,16 @@ export default function App() {
                   ))}
                 </div>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
                 {singlePane === 'reading' && (
-                  <span className="text-xs text-indigo-500 dark:text-indigo-400 font-semibold mr-2 flex items-center gap-1">
+                  <span className="text-xs text-indigo-500 dark:text-indigo-400 font-semibold mr-2 flex items-center gap-1 hidden md:flex">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     雙擊內容可直接修改
                   </span>
                 )}
+                {singlePane === 'reading' && renderParagraphDropdown()}
                 {renderPanelUtilityButtons(singlePane, 'single-pane-util')}
               </div>
             </div>
@@ -1160,12 +1231,13 @@ export default function App() {
                     <option value="reading">美化閱讀排版 (可編輯)</option>
                   </select>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
                   {leftPane === 'reading' && (
-                    <span className="text-[11px] text-indigo-500 dark:text-indigo-400 font-semibold mr-1 flex items-center gap-0.5">
+                    <span className="text-[11px] text-indigo-500 dark:text-indigo-400 font-semibold mr-1 flex items-center gap-0.5 hidden xl:flex">
                       💡 雙擊直接修改
                     </span>
                   )}
+                  {leftPane === 'reading' && renderParagraphDropdown()}
                   {renderPanelUtilityButtons(leftPane, 'left-pane-util')}
                 </div>
               </div>
@@ -1189,12 +1261,13 @@ export default function App() {
                     <option value="reading">美化閱讀排版 (可編輯)</option>
                   </select>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
                   {rightPane === 'reading' && (
-                    <span className="text-[11px] text-indigo-500 dark:text-indigo-400 font-semibold mr-1 flex items-center gap-0.5">
+                    <span className="text-[11px] text-indigo-500 dark:text-indigo-400 font-semibold mr-1 flex items-center gap-0.5 hidden xl:flex">
                       💡 雙擊直接修改
                     </span>
                   )}
+                  {rightPane === 'reading' && renderParagraphDropdown()}
                   {renderPanelUtilityButtons(rightPane, 'right-pane-util')}
                 </div>
               </div>
