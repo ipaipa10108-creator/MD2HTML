@@ -180,22 +180,37 @@ const findDOMNodeByText = (root, searchText) => {
 };
 
 export default function App() {
+  // Check for shared content from Android Web Share Target API on Mount/Initial Render
+  const sharedText = (() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('text') || params.get('title') || params.get('url') || '';
+    } catch (err) {
+      console.error('Failed to parse search params:', err);
+      return '';
+    }
+  })();
+
+  const defaultMarkdown = sharedText || initialMarkdown;
+  const defaultHtml = marked.parse(defaultMarkdown);
+
   // --- Content State ---
-  const [markdown, setMarkdown] = useState(initialMarkdown);
-  const [html, setHtml] = useState(() => marked.parse(initialMarkdown));
-  const [readingHtml, setReadingHtml] = useState(() => marked.parse(initialMarkdown));
+  const [markdown, setMarkdown] = useState(defaultMarkdown);
+  const [html, setHtml] = useState(() => defaultHtml);
+  const [readingHtml, setReadingHtml] = useState(() => defaultHtml);
 
   // --- Layout State ---
-  const [layout, setLayout] = useState('double'); // 'single' | 'double'
-  const [singlePane, setSinglePane] = useState('markdown'); // 'markdown' | 'html' | 'reading'
+  const [layout, setLayout] = useState('single'); // default changed to 'single'
+  const [singlePane, setSinglePane] = useState(() => sharedText ? 'reading' : 'markdown'); // 'markdown' | 'html' | 'reading'
   const [leftPane, setLeftPane] = useState('markdown'); // 'markdown' | 'html' | 'reading'
   const [rightPane, setRightPane] = useState('reading'); // 'markdown' | 'html' | 'reading'
+  const [autoJump, setAutoJump] = useState(true); // Auto jump on paste
 
   // --- Double Click Editable State ---
   const [isReadingEditable, setIsReadingEditable] = useState(false);
 
   // --- Undo/Redo History Stack ---
-  const [history, setHistory] = useState([initialMarkdown]);
+  const [history, setHistory] = useState([defaultMarkdown]);
   const [historyIndex, setHistoryIndex] = useState(0);
 
   // --- Modals State ---
@@ -278,6 +293,20 @@ export default function App() {
       setToast(prev => ({ ...prev, show: false }));
     }, 4500);
   };
+
+  // Handle shared content from Android Web Share Target API on Mount
+  useEffect(() => {
+    if (sharedText) {
+      try {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setTimeout(() => {
+          showToast('📥 已成功載入分享的 Markdown 文字！', 'success');
+        }, 150);
+      } catch (err) {
+        console.error('Failed to clear search parameters:', err);
+      }
+    }
+  }, [sharedText]);
 
   // Align left pane cursor and scroll when right pane is modified
   const alignLeftPaneToRight = (targetPane, oldTargetVal, newTargetVal) => {
@@ -527,6 +556,9 @@ export default function App() {
 
       if (type === 'markdown') {
         handleMarkdownChange(text);
+        if (autoJump && layout === 'single') {
+          setSinglePane('reading');
+        }
       } else if (type === 'html') {
         handleHtmlChange(text);
       } else if (type === 'reading') {
@@ -895,11 +927,20 @@ export default function App() {
     const elementRef = side === 'left' ? leftPaneElementRef : (side === 'right' ? rightPaneElementRef : singlePaneElementRef);
 
     if (paneType === 'markdown') {
+      const handleMarkdownPaste = () => {
+        if (autoJump && layout === 'single') {
+          setTimeout(() => {
+            setSinglePane('reading');
+          }, 120);
+        }
+      };
+
       return (
         <textarea
           ref={elementRef}
           value={markdown}
           onChange={(e) => handleMarkdownChange(e.target.value, side)}
+          onPaste={handleMarkdownPaste}
           placeholder="在此處輸入或貼上您的 Markdown 內容..."
           className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200 overflow-y-auto animate-fade-in"
         />
@@ -1007,6 +1048,19 @@ export default function App() {
             </>
           )}
         </div>
+
+        {/* Auto Jump Checkbox (only visible for markdown editor in single column layout) */}
+        {isMd && layout === 'single' && (
+          <label className="flex items-center gap-1.5 text-[11px] font-extrabold text-slate-500 dark:text-slate-400 cursor-pointer select-none mr-2 bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 px-2 py-1 rounded-lg">
+            <input
+              type="checkbox"
+              checked={autoJump}
+              onChange={(e) => setAutoJump(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500/30 accent-indigo-500 cursor-pointer"
+            />
+            <span>貼上後跳轉</span>
+          </label>
+        )}
 
         {/* Paste Buttons */}
         <button
