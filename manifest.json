@@ -21,7 +21,7 @@
   "orientation": "portrait",
   "share_target": {
     "action": "./index.html",
-    "method": "GET",
+    "method": "POST",
     "enctype": "application/x-www-form-urlencoded",
     "params": {
       "title": "title",
