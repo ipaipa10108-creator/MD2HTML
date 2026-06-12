@@ -197,8 +197,26 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved === 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return false; // Default is light mode (白底模式)
   });
+
+  const [captureTotalHeight, setCaptureTotalHeight] = useState(0);
+
+  const measureCaptureHeight = () => {
+    const el = document.getElementById('export-capture-area');
+    if (el) {
+      setCaptureTotalHeight(el.scrollHeight);
+    }
+  };
+
+  useEffect(() => {
+    if (showExportModal) {
+      const timer = setTimeout(() => {
+        measureCaptureHeight();
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [showExportModal, readingHtml, exportTheme]);
 
   // --- Temporary Status Messages (e.g. Copied) ---
   const [copiedStatus, setCopiedStatus] = useState({}); // { panelId: boolean }
@@ -1052,22 +1070,29 @@ export default function App() {
               <span>圖片切片匯出</span>
             </button>
 
-            {/* Dark Mode Toggle */}
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className="p-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-905 border border-slate-200/50 dark:border-slate-800/50 active:scale-95 transition-all"
-              title={darkMode ? '切換為淺色模式' : '切換為深色模式'}
-            >
-              {darkMode ? (
-                <svg className="w-4.5 h-4.5 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.46 5.05L5.75 4.343a1 1 0 10-1.414 1.414l.707.707zm1.414 8.486a1 1 0 01-1.414 0l-.707-.707a1 1 0 011.414-1.414l.707.707a1 1 0 010 1.414zM4 11a1 1 0 100-2H3a1 1 0 100 2h1z" clipRule="evenodd" />
+            {/* Dark Mode Switcher (白底/黑底模式) */}
+            <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-900 p-0.5 border border-slate-200/60 dark:border-slate-800/60 shrink-0">
+              <button 
+                onClick={() => setDarkMode(false)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${!darkMode ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-855'}`}
+                title="切換為白底模式"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
-              ) : (
-                <svg className="w-4.5 h-4.5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+                <span>白底</span>
+              </button>
+              <button 
+                onClick={() => setDarkMode(true)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${darkMode ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-855'}`}
+                title="切換為黑底模式"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                 </svg>
-              )}
-            </button>
+                <span>黑底</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -1274,7 +1299,7 @@ export default function App() {
                     {[
                       { key: 'full', label: '整頁輸出 (單一圖片)', desc: '將整篇文件輸出成一張長圖' },
                       { key: 'parts', label: '按張數均等裁切', desc: '將內容均分成指定張數 of 圖片' },
-                      { key: 'height', label: '按固定高度裁切', desc: '按固定像素高度逐張裁切' }
+                      { key: 'height', label: `按固定高度裁切 ${captureTotalHeight ? `(總高 ${captureTotalHeight}px)` : ''}`, desc: '按固定像素高度逐張裁切' }
                     ].map(mode => (
                       <button
                         key={mode.key}
@@ -1322,7 +1347,10 @@ export default function App() {
                       onChange={(e) => { setFixedHeight(parseInt(e.target.value) || 800); setSlices([]); }}
                       className="w-full px-3 py-1.5 rounded-lg text-sm border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 animate-fade-in"
                     />
-                    <div className="text-[9px] text-slate-400">標準高度介於 400px 到 3000px 之間</div>
+                    <div className="flex justify-between items-center text-[10px] text-slate-400 mt-1.5 border-t border-slate-200/40 dark:border-slate-700/40 pt-1.5 font-medium">
+                      <span>內容總高度: <strong className="text-indigo-500 dark:text-indigo-400">{captureTotalHeight} px</strong></span>
+                      <span>預估裁切: <strong className="text-indigo-500 dark:text-indigo-400">{Math.ceil(captureTotalHeight / fixedHeight)} 張</strong></span>
+                    </div>
                   </div>
                 )}
 
