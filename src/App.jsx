@@ -297,6 +297,7 @@ export default function App() {
 
   // Handle shared content from Android Web Share Target API on Mount
   useEffect(() => {
+    // 1. Handle legacy GET-based share target parameters
     if (sharedText) {
       try {
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -306,6 +307,45 @@ export default function App() {
       } catch (err) {
         console.error('Failed to clear search parameters:', err);
       }
+    }
+
+    // 2. Handle POST-based share target (intercepted by service worker)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('shared') === 'true') {
+      const checkSharedData = () => {
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+          const messageChannel = new MessageChannel();
+          messageChannel.port1.onmessage = (event) => {
+            if (event.data && event.data.type === 'SHARED_DATA') {
+              const { text, title, url } = event.data.data;
+              const sharedVal = text || title || url;
+              if (sharedVal) {
+                setMarkdown(sharedVal);
+                const parsedHTML = marked.parse(sharedVal);
+                setHtml(parsedHTML);
+                setReadingHtml(parsedHTML);
+                setHistory([sharedVal]);
+                setHistoryIndex(0);
+                setLayout('single');
+                setSinglePane('reading');
+                window.history.replaceState({}, document.title, window.location.pathname);
+                setTimeout(() => {
+                  showToast('📥 已成功載入分享的 Markdown 文字！', 'success');
+                }, 150);
+              }
+            }
+          };
+          navigator.serviceWorker.controller.postMessage(
+            { type: 'GET_SHARED_DATA' },
+            [messageChannel.port2]
+          );
+        } else {
+          // If controller is not ready yet, retry in 100ms
+          setTimeout(checkSharedData, 100);
+        }
+      };
+      
+      checkSharedData();
     }
   }, [sharedText]);
 
