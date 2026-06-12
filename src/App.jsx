@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { marked } from 'marked';
 import TurndownService from 'turndown';
 import html2canvas from 'html2canvas';
@@ -115,6 +115,11 @@ function syncContent(source, content) {
 
 祝您寫作愉快！如果有任何問題，歡迎隨時在編輯器中修改這個文件。
 `;
+
+// Helper to calculate character count
+const getCharCount = (str) => {
+  return str ? str.length : 0;
+};
 
 export default function App() {
   // --- Content State ---
@@ -468,7 +473,7 @@ export default function App() {
           [blob.type]: blob
         })
       ]);
-      showToast('📋 圖片已複製到剪貼簿！您現在可以在 LINE、Discord 中直接按 Ctrl+V (或長按貼上) 傳送圖片。', 'success');
+      showToast('📋 圖片已複製到剪貼簿！您現在可以在 LINE、Discord 中直接按 Ctrl+V (或貼上) 傳送圖片。', 'success');
     } catch (err) {
       console.error('Failed to copy slice: ', err);
       showToast('此瀏覽器不支援複製圖片，請使用下載按鈕存檔。', 'error');
@@ -640,6 +645,149 @@ export default function App() {
     setSelectedSlices(newSelected);
   };
 
+  // --- Sub-renderer: Layout View Render Mode ---
+  function renderWorkspaceContent(paneType) {
+    if (paneType === 'markdown') {
+      return (
+        <textarea
+          value={markdown}
+          onChange={(e) => handleMarkdownChange(e.target.value)}
+          placeholder="在此處輸入或貼上您的 Markdown 內容..."
+          className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200 overflow-y-auto animate-fade-in"
+        />
+      );
+    } else if (paneType === 'html') {
+      return (
+        <textarea
+          value={html}
+          onChange={(e) => handleHtmlChange(e.target.value)}
+          placeholder="在此處輸入或貼上您的 HTML 原始碼..."
+          className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200 overflow-y-auto animate-fade-in"
+        />
+      );
+    } else if (paneType === 'reading') {
+      return (
+        <div className="w-full h-full overflow-y-auto p-4 md:p-6 flex flex-col animate-fade-in">
+          {/* Double Click Edit Guide Info Banner */}
+          {!isReadingEditable && (
+            <div className="mb-4 shrink-0 text-[10px] text-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-950/40 rounded-lg px-2.5 py-1.5 flex items-center justify-between select-none">
+              <span className="flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+                提示：下方雙擊進入直覺式編輯模式。
+              </span>
+              <span className="font-semibold uppercase tracking-wider text-[9px] bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded">唯讀</span>
+            </div>
+          )}
+
+          {isReadingEditable && (
+            <div className="mb-4 shrink-0 text-[10px] text-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-100/50 dark:border-emerald-950/40 rounded-lg px-2.5 py-1.5 flex items-center justify-between animate-pulse select-none">
+              <span className="flex items-center gap-1.5 font-bold">
+                ✏️ 編輯中 (點擊文字直接修改)
+              </span>
+              <button
+                onClick={() => {
+                  if (readingViewRef.current) {
+                    readingViewRef.current.blur();
+                  }
+                }}
+                className="px-2.5 py-0.5 rounded bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[9px] shadow-sm transition-all"
+              >
+                儲存並完成編輯
+              </button>
+            </div>
+          )}
+
+          {/* Editable HTML Viewer Container */}
+          <div
+            ref={readingViewRef}
+            contentEditable={isReadingEditable}
+            onBlur={handleReadingBlur}
+            onDoubleClick={handleReadingDoubleClick}
+            suppressContentEditableWarning
+            className={`flex-1 preview-prose focus:outline-none min-h-[300px] pb-12 ${isReadingEditable ? 'ring-2 ring-indigo-500/20 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-900/50 border border-indigo-200/30 dark:border-indigo-900/20' : ''}`}
+            dangerouslySetInnerHTML={{ __html: readingHtml }}
+            data-placeholder="無內容。在此處雙擊或輸入文字，或在左邊編寫 Markdown..."
+          />
+        </div>
+      );
+    }
+  }
+
+  // --- Utility Panel Buttons ---
+  function renderPanelUtilityButtons(paneType, uniqueKey) {
+    const isMd = paneType === 'markdown';
+    const isHtml = paneType === 'html';
+    const isReading = paneType === 'reading';
+
+    return (
+      <div className="flex items-center gap-1">
+        {/* Copy Buttons */}
+        <div className="relative flex items-center rounded-lg bg-slate-100 dark:bg-slate-900 p-0.5 border border-slate-200/50 dark:border-slate-800/50">
+          {isMd && (
+            <button
+              onClick={() => handleCopy('markdown', `${uniqueKey}-copy-md`)}
+              className="px-2 py-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all"
+              title="複製 Markdown 文字"
+            >
+              {copiedStatus[`${uniqueKey}-copy-md`] ? '已複製!' : '複製 MD'}
+            </button>
+          )}
+
+          {(isHtml || isReading) && (
+            <>
+              <button
+                onClick={() => handleCopy('html', `${uniqueKey}-copy-html`)}
+                className="px-2 py-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all"
+                title="複製 HTML 原始碼"
+              >
+                {copiedStatus[`${uniqueKey}-copy-html`] ? '已複製!' : '複製 HTML'}
+              </button>
+              <button
+                onClick={() => handleCopy('plain', `${uniqueKey}-copy-plain`)}
+                className="px-2 py-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all"
+                title="複製純文字內容"
+              >
+                {copiedStatus[`${uniqueKey}-copy-plain`] ? '已複製!' : '複製純文字'}
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Paste Buttons */}
+        <button
+          onClick={() => handlePaste(paneType)}
+          className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-950 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded-lg transition-all"
+          title="從系統剪貼簿貼上文字並同步"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2v-3" />
+          </svg>
+          <span>貼上</span>
+        </button>
+
+        {/* Clear Button (Clear specific panel, added on Single Column & Left Column next to Paste) */}
+        {(uniqueKey === 'left-pane-util' || uniqueKey === 'single-pane-util') && (
+          <button
+            onClick={() => {
+              if (paneType === 'markdown') handleMarkdownChange('');
+              else if (paneType === 'html') handleHtmlChange('');
+              else if (paneType === 'reading') handleHtmlChange('');
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 border border-rose-200/50 dark:border-rose-950 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-all"
+            title="清除此面板內容"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span>清除</span>
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen lg:h-screen min-h-screen bg-slate-50 dark:bg-slate-950 font-sans transition-colors duration-200 overflow-visible lg:overflow-hidden">
       
@@ -693,7 +841,7 @@ export default function App() {
             <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-900 p-0.5 border border-slate-200/60 dark:border-slate-800/60">
               <button 
                 onClick={() => setLayout('single')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${layout === 'single' ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-850'}`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${layout === 'single' ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-855'}`}
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="2.5" />
@@ -742,7 +890,7 @@ export default function App() {
             {/* Dark Mode Toggle */}
             <button
               onClick={() => setDarkMode(!darkMode)}
-              className="p-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 active:scale-95 transition-all"
+              className="p-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-905 border border-slate-200/50 dark:border-slate-800/50 active:scale-95 transition-all"
               title={darkMode ? '切換為淺色模式' : '切換為深色模式'}
             >
               {darkMode ? (
@@ -844,7 +992,7 @@ export default function App() {
                   <select 
                     value={rightPane}
                     onChange={(e) => setRightPane(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-850 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-slate-100"
+                    className="px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-slate-850 border border-slate-200/80 dark:border-slate-850 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-slate-100"
                   >
                     <option value="markdown">Markdown 編輯格式</option>
                     <option value="html">HTML 原始碼編輯</option>
@@ -870,7 +1018,7 @@ export default function App() {
       </main>
 
       {/* --- FOOTER STATUS --- */}
-      <footer className="w-full border-t border-slate-200 dark:border-slate-900 px-4 py-3 bg-slate-50 dark:bg-slate-950 text-center text-xs text-slate-400 font-medium shrink-0">
+      <footer className="w-full border-t border-slate-200 dark:border-slate-900 px-4 py-3 bg-slate-50 dark:bg-slate-955 text-center text-xs text-slate-400 font-medium shrink-0">
         <div className="max-w-[1600px] mx-auto flex flex-col sm:flex-row gap-2 items-center justify-between">
           <p>© 2026 萬能 Markdown 編輯轉換器. Powered by React & Tailwind CSS.</p>
           <div className="flex gap-4 items-center">
@@ -946,9 +1094,9 @@ export default function App() {
                     </button>
                     <button
                       onClick={() => { setExportTheme('dark'); setSlices([]); }}
-                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold transition-all ${exportTheme === 'dark' ? 'border-indigo-500 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 ring-2 ring-indigo-500/10 shadow-sm' : 'border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-855'}`}
+                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold transition-all ${exportTheme === 'dark' ? 'border-indigo-500 bg-white dark:bg-slate-805 text-indigo-600 dark:text-indigo-400 ring-2 ring-indigo-500/10 shadow-sm' : 'border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-855'}`}
                     >
-                      <span className="w-3.5 h-3.5 rounded-full bg-slate-950 border border-slate-800"></span>
+                      <span className="w-3.5 h-3.5 rounded-full bg-slate-955 border border-slate-800"></span>
                       質感暗黑
                     </button>
                   </div>
@@ -1129,7 +1277,7 @@ export default function App() {
                         </div>
 
                         {/* Image Preview Container */}
-                        <div className="flex-1 bg-slate-200 dark:bg-slate-950/80 p-2 flex items-center justify-center min-h-[160px] max-h-[200px] overflow-hidden relative group">
+                        <div className="flex-1 bg-slate-200 dark:bg-slate-955/80 p-2 flex items-center justify-center min-h-[160px] max-h-[200px] overflow-hidden relative group">
                           <img 
                             src={slice.url} 
                             alt={slice.name} 
@@ -1140,7 +1288,7 @@ export default function App() {
                             <a
                               href={slice.url}
                               download={slice.name}
-                              className="px-3.5 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-[11px] shadow-sm transition-all text-center w-24"
+                              className="px-3.5 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-650 text-white font-semibold text-[11px] shadow-sm transition-all text-center w-24"
                             >
                               單張下載
                             </a>
@@ -1222,7 +1370,7 @@ export default function App() {
       <div className="absolute left-[-9999px] top-[-9999px] pointer-events-none" aria-hidden="true">
         <div 
           id="export-capture-area" 
-          className={`w-[800px] p-12 transition-colors duration-100 ${exportTheme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-950 text-slate-100 dark'}`}
+          className={`w-[800px] p-12 transition-colors duration-100 ${exportTheme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-955 text-slate-100 dark'}`}
         >
           <div 
             className="preview-prose"
@@ -1234,147 +1382,4 @@ export default function App() {
       {renderToast()}
     </div>
   );
-
-  // --- Sub-renderer: Layout View Render Mode ---
-  function renderWorkspaceContent(paneType) {
-    if (paneType === 'markdown') {
-      return (
-        <textarea
-          value={markdown}
-          onChange={(e) => handleMarkdownChange(e.target.value)}
-          placeholder="在此處輸入或貼上您的 Markdown 內容..."
-          className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200 overflow-y-auto animate-fade-in"
-        />
-      );
-    } else if (paneType === 'html') {
-      return (
-        <textarea
-          value={html}
-          onChange={(e) => handleHtmlChange(e.target.value)}
-          placeholder="在此處輸入或貼上您的 HTML 原始碼..."
-          className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200 overflow-y-auto animate-fade-in"
-        />
-      );
-    } else if (paneType === 'reading') {
-      return (
-        <div className="w-full h-full overflow-y-auto p-4 md:p-6 flex flex-col animate-fade-in">
-          {/* Double Click Edit Guide Info Banner */}
-          {!isReadingEditable && (
-            <div className="mb-4 shrink-0 text-[10px] text-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-950/40 rounded-lg px-2.5 py-1.5 flex items-center justify-between select-none">
-              <span className="flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                </svg>
-                提示：下方雙擊進入直覺式編輯模式。
-              </span>
-              <span className="font-semibold uppercase tracking-wider text-[9px] bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded">唯讀</span>
-            </div>
-          )}
-
-          {isReadingEditable && (
-            <div className="mb-4 shrink-0 text-[10px] text-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-100/50 dark:border-emerald-950/40 rounded-lg px-2.5 py-1.5 flex items-center justify-between animate-pulse select-none">
-              <span className="flex items-center gap-1.5 font-bold">
-                ✏️ 編輯中 (點擊文字直接修改)
-              </span>
-              <button
-                onClick={() => {
-                  if (readingViewRef.current) {
-                    readingViewRef.current.blur();
-                  }
-                }}
-                className="px-2.5 py-0.5 rounded bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[9px] shadow-sm transition-all"
-              >
-                儲存並完成編輯
-              </button>
-            </div>
-          )}
-
-          {/* Editable HTML Viewer Container */}
-          <div
-            ref={readingViewRef}
-            contentEditable={isReadingEditable}
-            onBlur={handleReadingBlur}
-            onDoubleClick={handleReadingDoubleClick}
-            suppressContentEditableWarning
-            className={`flex-1 preview-prose focus:outline-none min-h-[300px] pb-12 ${isReadingEditable ? 'ring-2 ring-indigo-500/20 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-900/50 border border-indigo-200/30 dark:border-indigo-900/20' : ''}`}
-            dangerouslySetInnerHTML={{ __html: readingHtml }}
-            data-placeholder="無內容。在此處雙擊或輸入文字，或在左邊編寫 Markdown..."
-          />
-        </div>
-      );
-    }
-  }
-
-  // --- Utility Panel Buttons ---
-  function renderPanelUtilityButtons(paneType, uniqueKey) {
-    const isMd = paneType === 'markdown';
-    const isHtml = paneType === 'html';
-    const isReading = paneType === 'reading';
-
-    return (
-      <div className="flex items-center gap-1">
-        {/* Copy Buttons */}
-        <div className="relative flex items-center rounded-lg bg-slate-100 dark:bg-slate-900 p-0.5 border border-slate-200/50 dark:border-slate-800/50">
-          {isMd && (
-            <button
-              onClick={() => handleCopy('markdown', `${uniqueKey}-copy-md`)}
-              className="px-2 py-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all"
-              title="複製 Markdown 文字"
-            >
-              {copiedStatus[`${uniqueKey}-copy-md`] ? '已複製!' : '複製 MD'}
-            </button>
-          )}
-
-          {(isHtml || isReading) && (
-            <>
-              <button
-                onClick={() => handleCopy('html', `${uniqueKey}-copy-html`)}
-                className="px-2 py-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all"
-                title="複製 HTML 原始碼"
-              >
-                {copiedStatus[`${uniqueKey}-copy-html`] ? '已複製!' : '複製 HTML'}
-              </button>
-              <button
-                onClick={() => handleCopy('plain', `${uniqueKey}-copy-plain`)}
-                className="px-2 py-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all"
-                title="複製純文字內容"
-              >
-                {copiedStatus[`${uniqueKey}-copy-plain`] ? '已複製!' : '複製純文字'}
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* Paste Buttons */}
-        <button
-          onClick={() => handlePaste(paneType)}
-          className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-950 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded-lg transition-all"
-          title="從系統剪貼簿貼上文字並同步"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2v-3" />
-          </svg>
-          <span>貼上</span>
-        </button>
-
-        {/* Clear Button (Clear specific panel, added on Single Column & Left Column next to Paste) */}
-        {(uniqueKey === 'left-pane-util' || uniqueKey === 'single-pane-util') && (
-          <button
-            onClick={() => {
-              if (paneType === 'markdown') handleMarkdownChange('');
-              else if (paneType === 'html') handleHtmlChange('');
-              else if (paneType === 'reading') handleHtmlChange('');
-            }}
-            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 border border-rose-200/50 dark:border-rose-950 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-all"
-            title="清除此面板內容"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            <span>清除</span>
-          </button>
-        )}
-      </div>
-    );
-  }
 }
