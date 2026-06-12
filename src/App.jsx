@@ -145,9 +145,13 @@ export default function App() {
   const [numParts, setNumParts] = useState(3);
   const [fixedHeight, setFixedHeight] = useState(800);
   const [slices, setSlices] = useState([]);
+  const [selectedSlices, setSelectedSlices] = useState({}); // { sliceIndex: boolean }
   const [isGenerating, setIsGenerating] = useState(false);
   const [zipProgress, setZipProgress] = useState(null);
   const [shareStatus, setShareStatus] = useState(null); // null | 'sharing' | 'success' | 'error' | 'unsupported'
+
+  // --- Toast Notification System ---
+  const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
 
   // --- Dark Mode State ---
   const [darkMode, setDarkMode] = useState(() => {
@@ -181,6 +185,13 @@ export default function App() {
       if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current);
     };
   }, []);
+
+  const showToast = (message, type = 'info') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }));
+    }, 4500);
+  };
 
   // --- Undo / Redo Stack Handler ---
   const pushToHistory = (newMD) => {
@@ -231,12 +242,10 @@ export default function App() {
     activePaneRef.current = 'markdown';
     setMarkdown(val);
     
-    // Parse to HTML
     const parsedHTML = marked.parse(val);
     setHtml(parsedHTML);
     setReadingHtml(parsedHTML);
 
-    // Debounce history additions
     if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current);
     historyTimeoutRef.current = setTimeout(() => {
       pushToHistory(val);
@@ -249,11 +258,9 @@ export default function App() {
     setHtml(val);
     setReadingHtml(val);
 
-    // Convert back to Markdown
     const convertedMD = turndownService.turndown(val);
     setMarkdown(convertedMD);
 
-    // Debounce history additions
     if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current);
     historyTimeoutRef.current = setTimeout(() => {
       pushToHistory(convertedMD);
@@ -271,8 +278,7 @@ export default function App() {
     }, 30);
   };
 
-  // When focus leaves Reading view (Blur), we execute the final synchronization.
-  // This completely resolves Android Chrome virtual keyboard layout/composition and Backspace bugs by avoiding re-renders while typing.
+  // When focus leaves Reading view (Blur), sync is executed. Resolves mobile keyboard/caret bugs.
   const handleReadingBlur = (e) => {
     setIsReadingEditable(false);
     const innerHTML = e.currentTarget.innerHTML;
@@ -341,9 +347,8 @@ export default function App() {
     setShowConfirmClear(false);
   };
 
-  // --- Slicing, Export & Share Logic ---
+  // --- Slicing, Export, Clipboard Copy & Share Logic ---
 
-  // Helper to format filenames following rule: md2pic_yyyymmddssss
   const getTimestampString = () => {
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -351,7 +356,6 @@ export default function App() {
     const dd = String(now.getDate()).padStart(2, '0');
     const secs = String(now.getSeconds()).padStart(2, '0');
     const ms = String(now.getMilliseconds()).padStart(3, '0').slice(0, 2);
-    // ssss is constructed using seconds (2-digit) and milliseconds (2-digit)
     const ssss = secs + ms;
     return `${yyyy}${mm}${dd}${ssss}`;
   };
@@ -359,6 +363,7 @@ export default function App() {
   const handleGenerateSlices = async () => {
     setIsGenerating(true);
     setSlices([]);
+    setSelectedSlices({});
     try {
       await new Promise(resolve => setTimeout(resolve, 200));
       const element = document.getElementById('export-capture-area');
@@ -436,19 +441,51 @@ export default function App() {
         }
       }
       setSlices(generated);
+      
+      // Auto-select all slices by default
+      const initialSelected = {};
+      generated.forEach((_, idx) => {
+        initialSelected[idx] = true;
+      });
+      setSelectedSlices(initialSelected);
+      showToast('✨ 圖片切片生成成功！', 'success');
     } catch (err) {
       console.error('Image Slicing Error: ', err);
+      showToast('生成圖片切片失敗。', 'error');
     } finally {
       setIsGenerating(false);
     }
   };
 
+  // Copy PNG Blob to Clipboard (highly compatible workaround for LINE/PC sharing)
+  const handleCopySliceImage = async (slice) => {
+    try {
+      const response = await fetch(slice.url);
+      const blob = await response.blob();
+      
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          [blob.type]: blob
+        })
+      ]);
+      showToast('📋 圖片已複製到剪貼簿！您現在可以在 LINE、Discord 中直接按 Ctrl+V (或長按貼上) 傳送圖片。', 'success');
+    } catch (err) {
+      console.error('Failed to copy slice: ', err);
+      showToast('此瀏覽器不支援複製圖片，請使用下載按鈕存檔。', 'error');
+    }
+  };
+
   const handleDownloadZip = async () => {
-    if (slices.length === 0) return;
+    const selectedList = slices.filter((_, idx) => selectedSlices[idx]);
+    if (selectedList.length === 0) {
+      showToast('請先選擇至少一張圖片！', 'info');
+      return;
+    }
+    
     setZipProgress('正在封裝壓縮檔...');
     try {
       const zip = new JSZip();
-      slices.forEach((slice) => {
+      selectedList.forEach((slice) => {
         const base64Data = slice.url.split(',')[1];
         zip.file(slice.name, base64Data, { base64: true });
       });
@@ -458,20 +495,27 @@ export default function App() {
       downloadLink.href = URL.createObjectURL(blobContent);
       downloadLink.download = `md2pic_zip_${getTimestampString()}.zip`;
       downloadLink.click();
+      showToast('📦 ZIP 壓縮檔下載完成！', 'success');
     } catch (err) {
       console.error('Failed to create ZIP: ', err);
+      showToast('下載 ZIP 壓縮檔失敗。', 'error');
     } finally {
       setZipProgress(null);
     }
   };
 
-  // Web Share API to send multiple sliced files directly to messaging apps like Line
+  // Web Share API to send SELECTED sliced files. Offers copy-to-clipboard fallback on cancel/error.
   const handleShare = async () => {
-    if (slices.length === 0) return;
+    const selectedList = slices.filter((_, idx) => selectedSlices[idx]);
+    if (selectedList.length === 0) {
+      showToast('請先選擇至少一張圖片！', 'info');
+      return;
+    }
+    
     setShareStatus('sharing');
     try {
       const filesArray = [];
-      for (const slice of slices) {
+      for (const slice of selectedList) {
         const response = await fetch(slice.url);
         const blob = await response.blob();
         const file = new File([blob], slice.name, { type: 'image/png' });
@@ -485,15 +529,25 @@ export default function App() {
           text: '使用「萬能 Markdown 編輯轉換器」匯出的切割圖片。'
         });
         setShareStatus('success');
+        showToast('分享呼叫成功！若 LINE 傳送失敗，請使用「複製」功能貼上傳送。', 'success');
         setTimeout(() => setShareStatus(null), 2000);
       } else {
+        // Fallback for PCs or unsupported mobile sharing: copy the first selected image
         setShareStatus('unsupported');
+        showToast('系統/軟體不支援多圖直接分享。已為您將第一張選取的圖片複製到剪貼簿，請貼上傳送！', 'info');
+        if (selectedList.length > 0) {
+          await handleCopySliceImage(selectedList[0]);
+        }
         setTimeout(() => setShareStatus(null), 4000);
       }
     } catch (err) {
       console.error('Web Share failed: ', err);
       if (err.name !== 'AbortError') {
         setShareStatus('error');
+        showToast('分享失敗。已自動將首張選取圖片複製到剪貼簿！', 'info');
+        if (selectedList.length > 0) {
+          await handleCopySliceImage(selectedList[0]);
+        }
         setTimeout(() => setShareStatus(null), 3000);
       } else {
         setShareStatus(null);
@@ -514,16 +568,76 @@ export default function App() {
           title: '分享單張圖片',
           text: `分享切片圖片：${slice.name}`
         });
+        showToast('分享呼叫成功！', 'success');
       } else {
-        alert('您的瀏覽器/裝置不支援 Web Share 檔案分享功能。請手動下載。');
+        // Fallback to copy image to clipboard
+        await handleCopySliceImage(slice);
       }
     } catch (err) {
       console.error('Share single failed: ', err);
+      if (err.name !== 'AbortError') {
+        await handleCopySliceImage(slice);
+      }
     }
   };
 
-  const getCharCount = (str) => {
-    return str ? str.length : 0;
+  // Toggle selection state for a slice
+  const toggleSelectSlice = (idx) => {
+    setSelectedSlices(prev => ({
+      ...prev,
+      [idx]: !prev[idx]
+    }));
+  };
+
+  // Render Toast Notifications
+  const renderToast = () => {
+    if (!toast.show) return null;
+    
+    const colors = {
+      success: 'border-emerald-500/30 bg-emerald-50/90 dark:bg-emerald-950/90 text-emerald-800 dark:text-emerald-300',
+      error: 'border-rose-500/30 bg-rose-50/90 dark:bg-rose-950/90 text-rose-800 dark:text-rose-300',
+      info: 'border-indigo-500/30 bg-indigo-50/90 dark:bg-indigo-950/90 text-indigo-800 dark:text-indigo-300',
+    };
+    
+    return (
+      <div className={`fixed bottom-6 right-6 z-[100] max-w-sm p-4 rounded-xl border shadow-xl backdrop-blur-md transition-all duration-300 transform translate-y-0 ${colors[toast.type] || colors.info}`}>
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 mt-0.5">
+            {toast.type === 'success' && (
+              <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            {toast.type === 'error' && (
+              <svg className="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            {toast.type === 'info' && (
+              <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+          </div>
+          <div className="flex-1 text-xs font-bold leading-relaxed">
+            {toast.message}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Helper variables for checkbox selection state
+  const selectedCount = Object.values(selectedSlices).filter(Boolean).length;
+  const allSelected = slices.length > 0 && Object.values(selectedSlices).every(Boolean);
+  
+  const handleToggleSelectAll = () => {
+    const nextVal = !allSelected;
+    const newSelected = {};
+    slices.forEach((_, idx) => {
+      newSelected[idx] = nextVal;
+    });
+    setSelectedSlices(newSelected);
   };
 
   return (
@@ -646,12 +760,12 @@ export default function App() {
       </header>
 
       {/* --- MAIN WORKSPACE --- */}
-      <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 py-4 md:py-6 flex flex-col min-h-0 overflow-y-auto lg:overflow-hidden">
+      <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 py-4 md:py-6 flex flex-col min-h-0 overflow-y-auto lg:overflow-hidden animate-fade-in">
         
         {layout === 'single' ? (
           /* --- SINGLE COLUMN LAYOUT --- */
           <div className="flex flex-col flex-1 h-[calc(100vh-200px)] md:h-[calc(100vh-220px)] lg:h-[calc(100vh-180px)] border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm overflow-hidden transition-all duration-200">
-            {/* Column Toolbar with Segmented Buttons instead of Dropdown */}
+            {/* Column Toolbar with Segmented Tab Buttons */}
             <div className="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between shrink-0">
               <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                 <span className="text-xs font-bold text-slate-400 tracking-wider uppercase mr-1">切換視角</span>
@@ -768,7 +882,7 @@ export default function App() {
 
       {/* --- MODAL: CONFIRM CLEAR --- */}
       {showConfirmClear && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-all duration-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-all duration-300 animate-fade-in">
           <div className="w-full max-w-md p-6 rounded-2xl glass shadow-2xl dark:shadow-indigo-950/20 scale-100 transition-all border border-slate-200/50 dark:border-slate-800/80">
             <div className="flex items-start gap-4">
               <div className="p-3 bg-rose-50 dark:bg-rose-950/30 text-rose-500 rounded-xl">
@@ -803,11 +917,11 @@ export default function App() {
 
       {/* --- MODAL: IMAGE EXPORT & SLICING --- */}
       {showExportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto transition-all">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto transition-all animate-fade-in">
           <div className="w-full max-w-5xl my-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col md:flex-row max-h-[85vh] overflow-hidden">
             
             {/* Modal Configurations Pane (Left) */}
-            <div className="w-full md:w-[350px] p-6 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-850 flex flex-col justify-between overflow-y-auto bg-slate-50/50 dark:bg-slate-900/30">
+            <div className="w-full md:w-[350px] p-6 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-850 flex flex-col justify-between overflow-y-auto bg-slate-50/50 dark:bg-slate-900/30 shrink-0">
               <div className="space-y-6">
                 <div>
                   <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -846,7 +960,7 @@ export default function App() {
                   <div className="space-y-1.5">
                     {[
                       { key: 'full', label: '整頁輸出 (單一圖片)', desc: '將整篇文件輸出成一張長圖' },
-                      { key: 'parts', label: '按張數均等裁切', desc: '將內容均分成指定張數的圖片' },
+                      { key: 'parts', label: '按張數均等裁切', desc: '將內容均分成指定張數 of 圖片' },
                       { key: 'height', label: '按固定高度裁切', desc: '按固定像素高度逐張裁切' }
                     ].map(mode => (
                       <button
@@ -863,7 +977,7 @@ export default function App() {
 
                 {/* 3. Slicing dynamic parameters */}
                 {sliceMode === 'parts' && (
-                  <div className="space-y-2 p-3 bg-slate-100 dark:bg-slate-850 rounded-xl">
+                  <div className="space-y-2 p-3 bg-slate-100 dark:bg-slate-855 rounded-xl">
                     <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex justify-between">
                       <span>均分張數:</span>
                       <strong className="text-indigo-500 font-bold">{numParts} 張</strong>
@@ -881,7 +995,7 @@ export default function App() {
                 )}
 
                 {sliceMode === 'height' && (
-                  <div className="space-y-2 p-3 bg-slate-100 dark:bg-slate-850 rounded-xl">
+                  <div className="space-y-2 p-3 bg-slate-100 dark:bg-slate-855 rounded-xl">
                     <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex justify-between">
                       <span>每張高度 (px):</span>
                       <strong className="text-indigo-500 font-bold">{fixedHeight} px</strong>
@@ -893,7 +1007,7 @@ export default function App() {
                       step="50"
                       value={fixedHeight}
                       onChange={(e) => { setFixedHeight(parseInt(e.target.value) || 800); setSlices([]); }}
-                      className="w-full px-3 py-1.5 rounded-lg text-sm border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/25"
+                      className="w-full px-3 py-1.5 rounded-lg text-sm border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 animate-fade-in"
                     />
                     <div className="text-[9px] text-slate-400">標準高度介於 400px 到 3000px 之間</div>
                   </div>
@@ -927,7 +1041,7 @@ export default function App() {
               {/* Close Panel Button */}
               <button
                 onClick={() => { setShowExportModal(false); setSlices([]); }}
-                className="mt-6 w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-850 font-bold text-xs transition-all"
+                className="mt-6 w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-855 font-bold text-xs transition-all"
               >
                 關閉視窗
               </button>
@@ -936,24 +1050,36 @@ export default function App() {
             {/* Modal Preview Canvas & Downloads Grid (Right) */}
             <div className="flex-1 p-6 flex flex-col justify-between overflow-hidden bg-slate-100 dark:bg-slate-950">
               
-              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-900 pb-3 flex-wrap gap-2">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">切片結果預覽 ({slices.length} 張圖)</span>
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-900 pb-3 flex-wrap gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">切片結果預覽 ({slices.length} 張圖)</span>
+                  {slices.length > 0 && (
+                    <button
+                      onClick={handleToggleSelectAll}
+                      className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 hover:underline px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-150/40 dark:border-indigo-900/40"
+                    >
+                      {allSelected ? '取消全選' : `全選 (${slices.length})`}
+                    </button>
+                  )}
+                </div>
+                
                 {slices.length > 0 && (
                   <div className="flex items-center gap-2 flex-wrap">
-                    {/* Share all slices via Web Share API */}
+                    {/* Share SELECTED slices via Web Share API */}
                     <button
                       onClick={handleShare}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-500 hover:bg-indigo-600 shadow-md shadow-indigo-500/10 active:scale-95 transition-all"
+                      disabled={selectedCount === 0}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-500 hover:bg-indigo-600 shadow-md shadow-indigo-500/10 active:scale-95 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500 transition-all"
                     >
                       {shareStatus === 'sharing' ? '傳送中...' :
                        shareStatus === 'success' ? '分享成功!' :
                        shareStatus === 'error' ? '分享失敗' :
-                       shareStatus === 'unsupported' ? '裝置不支援分享多圖' : '一鍵社群分享多圖'}
+                       shareStatus === 'unsupported' ? '不支援分享' : `選取分享 (${selectedCount})`}
                     </button>
-                    {/* ZIP download button */}
+                    {/* ZIP download button of SELECTED slices */}
                     <button
                       onClick={handleDownloadZip}
-                      disabled={zipProgress !== null}
+                      disabled={zipProgress !== null || selectedCount === 0}
                       className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 shadow-md shadow-emerald-500/10 active:scale-95 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500 transition-all"
                     >
                       {zipProgress ? (
@@ -963,7 +1089,7 @@ export default function App() {
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
-                          打包下載 (ZIP)
+                          `打包下載 (${selectedCount})`
                         </>
                       )}
                     </button>
@@ -986,7 +1112,22 @@ export default function App() {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {slices.map((slice, i) => (
-                      <div key={i} className="flex flex-col border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                      <div 
+                        key={i} 
+                        className={`flex flex-col border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all relative ${selectedSlices[i] ? 'border-indigo-500 bg-white dark:bg-slate-900 ring-2 ring-indigo-500/15' : 'border-slate-250 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-900/60 opacity-60'}`}
+                      >
+                        {/* Checkbox overlay button (top left corner) */}
+                        <div className="absolute top-2.5 left-2.5 z-10">
+                          <button
+                            onClick={() => toggleSelectSlice(i)}
+                            className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all shadow-sm ${selectedSlices[i] ? 'bg-indigo-500 border-indigo-500 text-white' : 'bg-white/90 border-slate-300 dark:bg-slate-800/90 dark:border-slate-650 text-transparent'}`}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </button>
+                        </div>
+
                         {/* Image Preview Container */}
                         <div className="flex-1 bg-slate-200 dark:bg-slate-950/80 p-2 flex items-center justify-center min-h-[160px] max-h-[200px] overflow-hidden relative group">
                           <img 
@@ -994,7 +1135,8 @@ export default function App() {
                             alt={slice.name} 
                             className="max-w-full max-h-full object-contain rounded-md shadow-sm border border-slate-200/20" 
                           />
-                          <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-2 items-center justify-center">
+                          {/* Desktop hover menu overlay */}
+                          <div className="absolute inset-0 bg-slate-900/60 opacity-0 lg:group-hover:opacity-100 transition-opacity flex flex-col gap-2 items-center justify-center">
                             <a
                               href={slice.url}
                               download={slice.name}
@@ -1003,18 +1145,51 @@ export default function App() {
                               單張下載
                             </a>
                             <button
-                              onClick={() => handleShareSingle(slice)}
+                              onClick={() => handleCopySliceImage(slice)}
                               className="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-[11px] shadow-sm transition-all text-center w-24"
+                            >
+                              複製圖片
+                            </button>
+                            <button
+                              onClick={() => handleShareSingle(slice)}
+                              className="px-3.5 py-1.5 rounded-lg bg-indigo-650 hover:bg-indigo-700 text-white font-semibold text-[11px] shadow-sm transition-all text-center w-24"
                             >
                               社群分享
                             </button>
                           </div>
                         </div>
-                        {/* Info details */}
-                        <div className="px-3 py-2 bg-slate-50 dark:bg-slate-900 border-t border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between text-[11px]">
-                          <span className="font-bold text-slate-500 dark:text-slate-400 truncate max-w-[65%]">{slice.name}</span>
-                          <span className="text-slate-400 font-mono">{Math.round(slice.width)} x {Math.round(slice.height)} px</span>
+
+                        {/* Info details / Mobile-friendly buttons below image */}
+                        <div className="px-3 py-2 bg-slate-50 dark:bg-slate-900 border-t border-slate-200/50 dark:border-slate-800/50 flex flex-col gap-2">
+                          <div className="flex items-center justify-between text-[11px] font-medium">
+                            <span className="font-bold text-slate-500 dark:text-slate-400 truncate max-w-[65%]">{slice.name}</span>
+                            <span className="text-slate-400 font-mono">{Math.round(slice.width)} x {Math.round(slice.height)} px</span>
+                          </div>
+                          
+                          {/* Mobile Actions (Visible on screens < lg) */}
+                          <div className="flex items-center gap-1.5 mt-1 lg:hidden">
+                            <a 
+                              href={slice.url} 
+                              download={slice.name} 
+                              className="flex-1 text-center py-1.5 rounded-lg bg-indigo-500 text-white font-bold text-[10px] shadow-sm active:scale-95"
+                            >
+                              下載
+                            </a>
+                            <button 
+                              onClick={() => handleCopySliceImage(slice)} 
+                              className="flex-1 py-1.5 rounded-lg bg-emerald-500 text-white font-bold text-[10px] shadow-sm active:scale-95"
+                            >
+                              複製
+                            </button>
+                            <button 
+                              onClick={() => handleShareSingle(slice)} 
+                              className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-[10px] shadow-sm active:scale-95"
+                            >
+                              分享
+                            </button>
+                          </div>
                         </div>
+
                       </div>
                     ))}
                   </div>
@@ -1022,13 +1197,20 @@ export default function App() {
               </div>
 
               {/* Notification Banner */}
-              <div className="text-[10px] text-slate-400 flex items-center gap-1.5 leading-relaxed bg-slate-100 dark:bg-slate-900/50 px-3.5 py-2.5 rounded-xl border border-slate-200/40 dark:border-slate-900/40">
-                <svg className="w-4 h-4 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="text-[10px] text-slate-400 flex items-start gap-1.5 leading-relaxed bg-slate-100 dark:bg-slate-900/50 px-3.5 py-2.5 rounded-xl border border-slate-200/40 dark:border-slate-900/40 shrink-0">
+                <svg className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span>
-                  本功能直接在您的瀏覽器端進行 Canvas 像素分析，<strong>絕不發送您的內容至任何伺服器</strong>，保護您的資料安全。部分外部資源圖片可能因跨域限制 (CORS) 無法正確截取。
-                </span>
+                <div className="space-y-0.5">
+                  <p>
+                    <strong>💡 電腦版與社群分享提示：</strong>
+                    本機電腦環境不支援直接以 Web Share 傳送檔案。在電腦上點擊<strong>「社群分享」</strong>或<strong>「複製」</strong>將會把圖片複製到剪貼簿，您只需直接在 LINE 對話框按下 <strong>Ctrl+V</strong> 貼上即可傳送！
+                  </p>
+                  <p>
+                    <strong>📱 手機版分享提示：</strong>
+                    若點擊分享發送至 LINE 後畫面閃退或對方未收到，這是由於通訊軟體的檔案沙盒限制所致。建議改為點擊<strong>「複製」</strong>，並直接於 LINE 輸入框中貼上傳送，此方式 100% 穩定有效。
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -1042,7 +1224,6 @@ export default function App() {
           id="export-capture-area" 
           className={`w-[800px] p-12 transition-colors duration-100 ${exportTheme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-950 text-slate-100 dark'}`}
         >
-          {/* Prose style wrapper for html2canvas to capture */}
           <div 
             className="preview-prose"
             dangerouslySetInnerHTML={{ __html: readingHtml }} 
@@ -1050,6 +1231,7 @@ export default function App() {
         </div>
       </div>
 
+      {renderToast()}
     </div>
   );
 
@@ -1061,7 +1243,7 @@ export default function App() {
           value={markdown}
           onChange={(e) => handleMarkdownChange(e.target.value)}
           placeholder="在此處輸入或貼上您的 Markdown 內容..."
-          className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-205 overflow-y-auto"
+          className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200 overflow-y-auto animate-fade-in"
         />
       );
     } else if (paneType === 'html') {
@@ -1070,12 +1252,12 @@ export default function App() {
           value={html}
           onChange={(e) => handleHtmlChange(e.target.value)}
           placeholder="在此處輸入或貼上您的 HTML 原始碼..."
-          className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-205 overflow-y-auto"
+          className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200 overflow-y-auto animate-fade-in"
         />
       );
     } else if (paneType === 'reading') {
       return (
-        <div className="w-full h-full overflow-y-auto p-4 md:p-6 flex flex-col">
+        <div className="w-full h-full overflow-y-auto p-4 md:p-6 flex flex-col animate-fade-in">
           {/* Double Click Edit Guide Info Banner */}
           {!isReadingEditable && (
             <div className="mb-4 shrink-0 text-[10px] text-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-950/40 rounded-lg px-2.5 py-1.5 flex items-center justify-between select-none">
@@ -1097,7 +1279,7 @@ export default function App() {
               <button
                 onClick={() => {
                   if (readingViewRef.current) {
-                    readingViewRef.current.blur(); // Blurring invokes handleReadingBlur & syncs
+                    readingViewRef.current.blur();
                   }
                 }}
                 className="px-2.5 py-0.5 rounded bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[9px] shadow-sm transition-all"
@@ -1183,7 +1365,7 @@ export default function App() {
               else if (paneType === 'html') handleHtmlChange('');
               else if (paneType === 'reading') handleHtmlChange('');
             }}
-            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 border border-rose-200/50 dark:border-rose-950 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-all"
+            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 border border-rose-200/50 dark:border-rose-950 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-all"
             title="清除此面板內容"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
