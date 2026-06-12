@@ -199,3 +199,20 @@
   color: #94a3b8;
   cursor: text;
 }
+
+/* Edit Sync Highlight Animation */
+@keyframes changeHighlight {
+  0% {
+    background-color: rgba(99, 102, 241, 0.25);
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+    border-radius: 4px;
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+.animate-change-highlight {
+  animation: changeHighlight 2s ease-out;
+}

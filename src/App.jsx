@@ -121,6 +121,41 @@ const getCharCount = (str) => {
   return str ? str.length : 0;
 };
 
+// Helper to find the first index of difference between two strings
+const findDiffIndex = (oldStr, newStr) => {
+  if (!oldStr || !newStr) return 0;
+  if (oldStr === newStr) return -1;
+  const minLen = Math.min(oldStr.length, newStr.length);
+  for (let i = 0; i < minLen; i++) {
+    if (oldStr[i] !== newStr[i]) {
+      return i;
+    }
+  }
+  return minLen;
+};
+
+// Helper to find a text node or element containing a specific text snippet
+const findDOMNodeByText = (root, searchText) => {
+  if (!root || !searchText) return null;
+  
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.nodeValue.includes(searchText)) {
+      return node;
+    }
+  }
+  
+  const elements = root.getElementsByTagName('*');
+  for (let el of elements) {
+    if (el.innerText && el.innerText.includes(searchText) && el.children.length === 0) {
+      return el;
+    }
+  }
+  
+  return null;
+};
+
 export default function App() {
   // --- Content State ---
   const [markdown, setMarkdown] = useState(initialMarkdown);
@@ -171,6 +206,11 @@ export default function App() {
   // --- Refs ---
   const activePaneRef = useRef(null); // 'markdown' | 'html' | 'reading'
   const readingViewRef = useRef(null);
+  const leftReadingViewRef = useRef(null);
+  const rightReadingViewRef = useRef(null);
+  const leftPaneElementRef = useRef(null);
+  const rightPaneElementRef = useRef(null);
+  const singlePaneElementRef = useRef(null);
   const historyTimeoutRef = useRef(null);
 
   // Sync Dark Mode Class on Mount & Update
@@ -196,6 +236,89 @@ export default function App() {
     setTimeout(() => {
       setToast(prev => ({ ...prev, show: false }));
     }, 4500);
+  };
+
+  // Align left pane cursor and scroll when right pane is modified
+  const alignLeftPaneToRight = (targetPane, oldTargetVal, newTargetVal) => {
+    if (layout !== 'double') return;
+    
+    // Find the first index of difference
+    const diffIdx = findDiffIndex(oldTargetVal, newTargetVal);
+    if (diffIdx === -1) return;
+    
+    // Schedule the scroll/caret highlight in the next tick (after DOM updates)
+    setTimeout(() => {
+      const leftEl = leftPaneElementRef.current;
+      if (!leftEl) return;
+      
+      if (targetPane === 'markdown' || targetPane === 'html') {
+        // Target is a textarea
+        try {
+          // 1. Set the caret position (selectionStart/selectionEnd)
+          leftEl.focus();
+          leftEl.setSelectionRange(diffIdx, diffIdx);
+          
+          // 2. Scroll the textarea to make the modified line visible
+          const textBefore = newTargetVal.substring(0, diffIdx);
+          const lineIndex = textBefore.split('\n').length - 1;
+          
+          const computedStyle = window.getComputedStyle(leftEl);
+          const lineHeight = parseInt(computedStyle.lineHeight) || 20;
+          
+          leftEl.scrollTop = Math.max(0, lineIndex * lineHeight - leftEl.clientHeight / 2);
+
+          // Restore focus to the active element (which is the right pane textarea)
+          const activeEl = rightPaneElementRef.current;
+          if (activeEl && activeEl !== document.activeElement) {
+            activeEl.focus();
+          }
+        } catch (e) {
+          console.warn("Failed to sync selection/scroll in textarea:", e);
+        }
+      } else if (targetPane === 'reading') {
+        // Target is the Reading View outer container (which has ref={leftPaneElementRef})
+        // The inner contentEditable element is leftReadingViewRef.current
+        const readingDiv = leftReadingViewRef.current;
+        if (!readingDiv) return;
+        
+        try {
+          // Convert HTML string to plain text to find the text diff index
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = newTargetVal;
+          const newPlainText = tempDiv.innerText;
+          
+          const tempOldDiv = document.createElement('div');
+          tempOldDiv.innerHTML = oldTargetVal;
+          const oldPlainText = tempOldDiv.innerText;
+          
+          const textDiffIdx = findDiffIndex(oldPlainText, newPlainText);
+          if (textDiffIdx === -1) return;
+          
+          // Get a text snippet around the edit position to search in DOM
+          const start = Math.max(0, textDiffIdx - 10);
+          const end = Math.min(newPlainText.length, textDiffIdx + 10);
+          const snippet = newPlainText.substring(start, end).trim();
+          
+          if (snippet.length > 2) {
+            const targetNode = findDOMNodeByText(readingDiv, snippet);
+            if (targetNode) {
+              const elementToScroll = targetNode.nodeType === Node.TEXT_NODE ? targetNode.parentElement : targetNode;
+              
+              // Scroll the element into view of the container
+              elementToScroll.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              
+              // Add a visual flash highlight
+              elementToScroll.classList.add('animate-change-highlight');
+              setTimeout(() => {
+                elementToScroll.classList.remove('animate-change-highlight');
+              }, 2000);
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to sync scroll in reading view:", e);
+        }
+      }
+    }, 80);
   };
 
   // --- Undo / Redo Stack Handler ---
@@ -243,8 +366,9 @@ export default function App() {
   // --- Three-way Synchronization Handlers ---
 
   // 1. Triggered by typing in Markdown Textarea
-  const handleMarkdownChange = (val) => {
+  const handleMarkdownChange = (val, side) => {
     activePaneRef.current = 'markdown';
+    const oldHtml = html;
     setMarkdown(val);
     
     const parsedHTML = marked.parse(val);
@@ -255,11 +379,22 @@ export default function App() {
     historyTimeoutRef.current = setTimeout(() => {
       pushToHistory(val);
     }, 400);
+
+    // If the edit came from the right column, align the left column
+    if (layout === 'double' && side === 'right') {
+      if (leftPane === 'html') {
+        alignLeftPaneToRight('html', oldHtml, parsedHTML);
+      } else if (leftPane === 'reading') {
+        alignLeftPaneToRight('reading', oldHtml, parsedHTML);
+      }
+    }
   };
 
   // 2. Triggered by typing in HTML Textarea
-  const handleHtmlChange = (val) => {
+  const handleHtmlChange = (val, side) => {
     activePaneRef.current = 'html';
+    const oldMarkdown = markdown;
+    const oldHtml = html;
     setHtml(val);
     setReadingHtml(val);
 
@@ -270,28 +405,50 @@ export default function App() {
     historyTimeoutRef.current = setTimeout(() => {
       pushToHistory(convertedMD);
     }, 400);
+
+    // If the edit came from the right column, align the left column
+    if (layout === 'double' && side === 'right') {
+      if (leftPane === 'markdown') {
+        alignLeftPaneToRight('markdown', oldMarkdown, convertedMD);
+      } else if (leftPane === 'reading') {
+        alignLeftPaneToRight('reading', oldHtml, val);
+      }
+    }
   };
 
   // Double click event on Reading View
-  const handleReadingDoubleClick = () => {
+  const handleReadingDoubleClick = (side) => {
     setIsReadingEditable(true);
     activePaneRef.current = 'reading';
     setTimeout(() => {
-      if (readingViewRef.current) {
-        readingViewRef.current.focus();
+      const readingRef = side === 'left' ? leftReadingViewRef : (side === 'right' ? rightReadingViewRef : readingViewRef);
+      if (readingRef.current) {
+        readingRef.current.focus();
       }
     }, 30);
   };
 
   // When focus leaves Reading view (Blur), sync is executed. Resolves mobile keyboard/caret bugs.
-  const handleReadingBlur = (e) => {
+  const handleReadingBlur = (e, side) => {
     setIsReadingEditable(false);
     const innerHTML = e.currentTarget.innerHTML;
+    const oldMarkdown = markdown;
+    const oldHtml = html;
+    
     setHtml(innerHTML);
     const convertedMD = turndownService.turndown(innerHTML);
     setMarkdown(convertedMD);
     setReadingHtml(innerHTML);
     pushToHistory(convertedMD);
+
+    // If the edit came from the right column, align the left column
+    if (layout === 'double' && side === 'right') {
+      if (leftPane === 'markdown') {
+        alignLeftPaneToRight('markdown', oldMarkdown, convertedMD);
+      } else if (leftPane === 'html') {
+        alignLeftPaneToRight('html', oldHtml, innerHTML);
+      }
+    }
   };
 
   // --- Clipboard utilities ---
@@ -646,12 +803,15 @@ export default function App() {
   };
 
   // --- Sub-renderer: Layout View Render Mode ---
-  function renderWorkspaceContent(paneType) {
+  function renderWorkspaceContent(paneType, side) {
+    const elementRef = side === 'left' ? leftPaneElementRef : (side === 'right' ? rightPaneElementRef : singlePaneElementRef);
+
     if (paneType === 'markdown') {
       return (
         <textarea
+          ref={elementRef}
           value={markdown}
-          onChange={(e) => handleMarkdownChange(e.target.value)}
+          onChange={(e) => handleMarkdownChange(e.target.value, side)}
           placeholder="在此處輸入或貼上您的 Markdown 內容..."
           className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200 overflow-y-auto animate-fade-in"
         />
@@ -659,15 +819,20 @@ export default function App() {
     } else if (paneType === 'html') {
       return (
         <textarea
+          ref={elementRef}
           value={html}
-          onChange={(e) => handleHtmlChange(e.target.value)}
+          onChange={(e) => handleHtmlChange(e.target.value, side)}
           placeholder="在此處輸入或貼上您的 HTML 原始碼..."
           className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200 overflow-y-auto animate-fade-in"
         />
       );
     } else if (paneType === 'reading') {
+      const readingRef = side === 'left' ? leftReadingViewRef : (side === 'right' ? rightReadingViewRef : readingViewRef);
       return (
-        <div className="w-full h-full overflow-y-auto p-4 md:p-6 flex flex-col animate-fade-in">
+        <div 
+          ref={elementRef}
+          className="w-full h-full overflow-y-auto p-4 md:p-6 flex flex-col animate-fade-in"
+        >
           {/* Double Click Edit Guide Info Banner */}
           {!isReadingEditable && (
             <div className="mb-4 shrink-0 text-[10px] text-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-950/40 rounded-lg px-2.5 py-1.5 flex items-center justify-between select-none">
@@ -688,8 +853,8 @@ export default function App() {
               </span>
               <button
                 onClick={() => {
-                  if (readingViewRef.current) {
-                    readingViewRef.current.blur();
+                  if (readingRef.current) {
+                    readingRef.current.blur();
                   }
                 }}
                 className="px-2.5 py-0.5 rounded bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[9px] shadow-sm transition-all"
@@ -701,10 +866,10 @@ export default function App() {
 
           {/* Editable HTML Viewer Container */}
           <div
-            ref={readingViewRef}
+            ref={readingRef}
             contentEditable={isReadingEditable}
-            onBlur={handleReadingBlur}
-            onDoubleClick={handleReadingDoubleClick}
+            onBlur={(e) => handleReadingBlur(e, side)}
+            onDoubleClick={() => handleReadingDoubleClick(side)}
             suppressContentEditableWarning
             className={`flex-1 preview-prose focus:outline-none min-h-[300px] pb-12 ${isReadingEditable ? 'ring-2 ring-indigo-500/20 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-900/50 border border-indigo-200/30 dark:border-indigo-900/20' : ''}`}
             dangerouslySetInnerHTML={{ __html: readingHtml }}
@@ -948,7 +1113,7 @@ export default function App() {
             
             {/* Workspace Area */}
             <div className="flex-1 min-h-0 relative overflow-hidden">
-              {renderWorkspaceContent(singlePane)}
+              {renderWorkspaceContent(singlePane, 'single')}
             </div>
           </div>
         ) : (
@@ -980,7 +1145,7 @@ export default function App() {
                 </div>
               </div>
               <div className="flex-1 min-h-0 relative overflow-hidden">
-                {renderWorkspaceContent(leftPane)}
+                {renderWorkspaceContent(leftPane, 'left')}
               </div>
             </div>
 
@@ -1009,7 +1174,7 @@ export default function App() {
                 </div>
               </div>
               <div className="flex-1 min-h-0 relative overflow-hidden">
-                {renderWorkspaceContent(rightPane)}
+                {renderWorkspaceContent(rightPane, 'right')}
               </div>
             </div>
 
