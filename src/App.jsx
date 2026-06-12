@@ -436,7 +436,7 @@ export default function App() {
   // --- Three-way Synchronization Handlers ---
 
   // 1. Triggered by typing in Markdown Textarea
-  const handleMarkdownChange = (val, side) => {
+  const handleMarkdownChange = (val, side, nativeEvent) => {
     activePaneRef.current = 'markdown';
     const oldHtml = html;
     setMarkdown(val);
@@ -449,6 +449,23 @@ export default function App() {
     historyTimeoutRef.current = setTimeout(() => {
       pushToHistory(val);
     }, 400);
+
+    // Auto-jump logic for GBoard paste suggestion and other direct pasting methods
+    if (autoJump && layout === 'single') {
+      const isPaste = nativeEvent && (
+        nativeEvent.inputType === 'insertFromPaste' ||
+        nativeEvent.inputType === 'insertReplacementText'
+      );
+      // Fallback check: if length changes significantly (e.g. > 15 chars) and it's not composition text
+      const isLargeDiff = val.length - markdown.length > 15;
+      const isComposition = nativeEvent && nativeEvent.inputType === 'insertCompositionText';
+
+      if (isPaste || (isLargeDiff && !isComposition)) {
+        setTimeout(() => {
+          setSinglePane('reading');
+        }, 120);
+      }
+    }
 
     // If the edit came from the right column, align the left column
     if (layout === 'double' && side === 'right') {
@@ -583,6 +600,95 @@ export default function App() {
   };
 
   // --- Slicing, Export, Clipboard Copy & Share Logic ---
+
+  const handleExportPDF = async (action) => {
+    showToast('⏳ 正在產生 PDF 文件，請稍候...', 'info');
+    try {
+      const element = document.getElementById('export-capture-area');
+      if (!element) {
+        showToast('找不到匯出區域', 'error');
+        return;
+      }
+
+      // Render the offscreen element to a high-resolution canvas
+      const canvas = await html2canvas(element, {
+        useCORS: true,
+        scale: 2, // 2x high-resolution rendering
+        backgroundColor: '#ffffff', // PDFs should always have white background
+        logging: false
+      });
+
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+
+      // Calculate PDF dimensions (A4 size: 595.28 pt x 841.89 pt)
+      const pdfWidth = 595.28;
+      const pdfHeight = 841.89;
+      
+      // Calculate scale factor to fit PDF width
+      const ratio = pdfWidth / (imgWidth / 2); // image width divided by scale factor 2
+      
+      // Calculate how many canvas pixels fit on one A4 page
+      const pageHeightInCanvas = (pdfHeight / ratio) * 2; // page height in canvas scale 2
+      const totalPages = Math.ceil(imgHeight / pageHeightInCanvas);
+      
+      // Load jsPDF dynamically
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'pt',
+        format: 'a4'
+      });
+
+      for (let i = 0; i < totalPages; i++) {
+        if (i > 0) pdf.addPage();
+        
+        const startY = i * pageHeightInCanvas;
+        const currentHeight = Math.min(pageHeightInCanvas, imgHeight - startY);
+        
+        // Draw slice of the main canvas to a temporary slice canvas
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = imgWidth;
+        sliceCanvas.height = currentHeight;
+        
+        const ctx = sliceCanvas.getContext('2d');
+        ctx.drawImage(canvas, 0, startY, imgWidth, currentHeight, 0, 0, imgWidth, currentHeight);
+        
+        const sliceImgData = sliceCanvas.toDataURL('image/jpeg', 0.95);
+        const destHeight = (currentHeight / 2) * ratio;
+        
+        pdf.addImage(sliceImgData, 'JPEG', 0, 0, pdfWidth, destHeight);
+      }
+
+      const ts = getTimestampString();
+      const fileName = `md2pdf_${ts}.pdf`;
+
+      if (action === 'download') {
+        pdf.save(fileName);
+        showToast('✅ PDF 已成功儲存至本地！', 'success');
+      } else if (action === 'share') {
+        // Convert to Blob and File object for sharing
+        const pdfBlob = pdf.output('blob');
+        const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+        if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+          await navigator.share({
+            files: [pdfFile],
+            title: '分享 PDF 文件',
+            text: '這是從 Markdown 編輯器產生的 PDF 文件。'
+          });
+          showToast('✅ 分享視窗已開啟！', 'success');
+        } else {
+          // Fallback if sharing is unsupported
+          pdf.save(fileName);
+          showToast('⚠️ 本裝置不支援直接分享 PDF，已自動為您下載！', 'warning');
+        }
+      }
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+      showToast('❌ 產生 PDF 失敗，請重試！', 'error');
+    }
+  };
 
   const getTimestampString = () => {
     const now = new Date();
@@ -939,7 +1045,7 @@ export default function App() {
         <textarea
           ref={elementRef}
           value={markdown}
-          onChange={(e) => handleMarkdownChange(e.target.value, side)}
+          onChange={(e) => handleMarkdownChange(e.target.value, side, e.nativeEvent)}
           onPaste={handleMarkdownPaste}
           placeholder="在此處輸入或貼上您的 Markdown 內容..."
           className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200 overflow-y-auto animate-fade-in"
@@ -1048,6 +1154,32 @@ export default function App() {
             </>
           )}
         </div>
+
+        {/* PDF Export Buttons */}
+        {isReading && (
+          <div className="relative flex items-center rounded-lg bg-indigo-50/50 dark:bg-indigo-950/20 p-0.5 border border-indigo-200/30 dark:border-indigo-900/30">
+            <button
+              onClick={() => handleExportPDF('download')}
+              className="px-2 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:bg-white dark:hover:bg-slate-800 rounded transition-all flex items-center gap-1"
+              title="將此閱讀排版儲存為 PDF 檔案到本地"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>存為 PDF</span>
+            </button>
+            <button
+              onClick={() => handleExportPDF('share')}
+              className="px-2 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:bg-white dark:hover:bg-slate-800 rounded transition-all flex items-center gap-1"
+              title="將此閱讀排版轉為 PDF 並分享至 LINE 或其他 App"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8.684 10.742l4.628-2.314m0 0a3 3 0 10-2.222-2.518m2.222 2.518a3 3 0 11-2.222 2.518m0 0L8.684 13.24" />
+              </svg>
+              <span>分享 PDF</span>
+            </button>
+          </div>
+        )}
 
         {/* Auto Jump Checkbox (only visible for markdown editor in single column layout) */}
         {isMd && layout === 'single' && (
