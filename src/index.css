@@ -1,0 +1,201 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans antialiased;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 dark:bg-slate-800 rounded-full hover:bg-slate-400 dark:hover:bg-slate-700 transition-colors;
+}
+
+/* Glassmorphism Classes */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.dark .glass {
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Prose Typography styling for preview area */
+.preview-prose {
+  font-family: 'Inter', system-ui, sans-serif;
+  line-height: 1.75;
+}
+
+.preview-prose h1 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 2.25em;
+  font-weight: 800;
+  margin-top: 0;
+  margin-bottom: 0.85em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.dark .preview-prose h1 {
+  border-bottom-color: rgba(51, 65, 85, 0.5);
+}
+
+.preview-prose h2 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.5em;
+  font-weight: 700;
+  margin-top: 1.6em;
+  margin-bottom: 0.6em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.4);
+}
+
+.dark .preview-prose h2 {
+  border-bottom-color: rgba(51, 65, 85, 0.3);
+}
+
+.preview-prose h3 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.25em;
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 0.6em;
+}
+
+.preview-prose p {
+  margin-top: 0;
+  margin-bottom: 1.2em;
+}
+
+.preview-prose a {
+  color: #3b82f6;
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.preview-prose a:hover {
+  color: #2563eb;
+}
+
+.preview-prose code {
+  background-color: rgba(148, 163, 184, 0.15);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875em;
+}
+
+.preview-prose pre {
+  background-color: #0f172a;
+  color: #f8fafc;
+  padding: 1em 1.25em;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin-top: 1em;
+  margin-bottom: 1.5em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.dark .preview-prose pre {
+  background-color: #020617;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.preview-prose pre code {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
+.preview-prose ul {
+  list-style-type: disc;
+  padding-left: 1.5em;
+  margin-top: 0;
+  margin-bottom: 1.2em;
+}
+
+.preview-prose ol {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+  margin-top: 0;
+  margin-bottom: 1.2em;
+}
+
+.preview-prose li {
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+}
+
+.preview-prose blockquote {
+  border-left: 4px solid #cbd5e1;
+  padding-left: 1em;
+  color: #64748b;
+  font-style: italic;
+  margin: 1.2em 0;
+}
+
+.dark .preview-prose blockquote {
+  border-left-color: #334155;
+  color: #94a3b8;
+}
+
+.preview-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1.2em;
+  margin-bottom: 1.2em;
+}
+
+.preview-prose th, .preview-prose td {
+  border: 1px solid #e2e8f0;
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+
+.dark .preview-prose th, .dark .preview-prose td {
+  border-color: #334155;
+}
+
+.preview-prose th {
+  background-color: rgba(241, 245, 249, 0.8);
+  font-weight: 600;
+}
+
+.dark .preview-prose th {
+  background-color: rgba(30, 41, 59, 0.8);
+}
+
+.preview-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+
+/* Fix contentEditable empty placeholder */
+[contenteditable="true"]:empty:before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  cursor: text;
+}
