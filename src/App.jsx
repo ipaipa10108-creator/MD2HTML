@@ -205,6 +205,7 @@ export default function App() {
   const [leftPane, setLeftPane] = useState('markdown'); // 'markdown' | 'html' | 'reading'
   const [rightPane, setRightPane] = useState('reading'); // 'markdown' | 'html' | 'reading'
   const [autoJump, setAutoJump] = useState(true); // Auto jump on paste
+  const [showToolbars, setShowToolbars] = useState(true); // Auto hide/show toolbars on mobile scroll/tap
 
   // --- Double Click Editable State ---
   const [isReadingEditable, setIsReadingEditable] = useState(false);
@@ -307,6 +308,47 @@ export default function App() {
       }
     }
   }, [sharedText]);
+
+  const lastScrollY = useRef(0);
+
+  const handleScroll = (e) => {
+    // Only auto-hide on mobile devices (e.g. window.innerWidth < 768)
+    if (window.innerWidth >= 768) return;
+    
+    // If the user is currently editing, don't hide
+    if (isReadingEditable) return;
+    if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') {
+      return;
+    }
+
+    const scrollTop = e.currentTarget.scrollTop;
+    const diff = scrollTop - lastScrollY.current;
+    
+    if (scrollTop > 20 && Math.abs(diff) > 8) {
+      if (diff > 0) {
+        // Scrolling down -> hide toolbars
+        if (showToolbars) {
+          setShowToolbars(false);
+        }
+      }
+    }
+    // If scrolled back to absolute top, show them
+    if (scrollTop < 5) {
+      if (!showToolbars) {
+        setShowToolbars(true);
+      }
+    }
+    lastScrollY.current = scrollTop;
+  };
+
+  const handleContentClick = () => {
+    // Single tap on content to show toolbars on mobile if they are hidden
+    if (window.innerWidth < 768) {
+      if (!showToolbars) {
+        setShowToolbars(true);
+      }
+    }
+  };
 
   // Align left pane cursor and scroll when right pane is modified
   const alignLeftPaneToRight = (targetPane, oldTargetVal, newTargetVal) => {
@@ -998,32 +1040,56 @@ export default function App() {
     });
   };
 
-  const renderParagraphDropdown = () => {
+  const renderReadingHeaderControls = (paneType) => {
+    if (paneType !== 'reading') return null;
     const headings = parseHeadings(markdown);
-    if (headings.length === 0) return null;
 
     return (
-      <div className="flex items-center gap-1 shrink-0 select-none">
-        <select
-          onChange={(e) => {
-            const val = e.target.value;
-            if (val !== "") {
-              handleScrollToHeading(parseInt(val));
-              e.target.value = "";
-            }
-          }}
-          defaultValue=""
-          className="px-2 py-1.5 rounded-lg text-[11px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500/20 text-slate-700 dark:text-slate-200 max-w-[130px] sm:max-w-[160px] truncate"
-        >
-          <option value="" disabled>-- 快速跳至段落 --</option>
-          {headings.map((h, idx) => (
-            <option key={idx} value={idx}>
-              {"\u00a0".repeat((h.level - 1) * 2)}
-              {h.level === 1 ? '📌 ' : h.level === 2 ? '🔹 ' : '▪️ '}
-              {h.text}
-            </option>
-          ))}
-        </select>
+      <div className="flex items-center gap-1.5 shrink-0 select-none">
+        {headings.length > 0 && (
+          <select
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val !== "") {
+                handleScrollToHeading(parseInt(val));
+                e.target.value = "";
+              }
+            }}
+            defaultValue=""
+            className="px-2 py-1.5 rounded-lg text-[11px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500/20 text-slate-700 dark:text-slate-200 max-w-[130px] sm:max-w-[160px] truncate"
+          >
+            <option value="" disabled>-- 快速跳至段落 --</option>
+            {headings.map((h, idx) => (
+              <option key={idx} value={idx}>
+                {"\u00a0".repeat((h.level - 1) * 2)}
+                {h.level === 1 ? '📌 ' : h.level === 2 ? '🔹 ' : '▪️ '}
+                {h.text}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {/* Mobile PDF Action Buttons (only visible on small screens next to select dropdown) */}
+        <div className="flex sm:hidden items-center gap-0.5 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/20 p-0.5 border border-indigo-200/30 dark:border-indigo-900/30">
+          <button
+            onClick={() => handleExportPDF('download')}
+            className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-white dark:hover:bg-slate-800 rounded transition-all"
+            title="存為 PDF"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => handleExportPDF('share')}
+            className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-white dark:hover:bg-slate-800 rounded transition-all"
+            title="分享 PDF"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8.684 10.742l4.628-2.314m0 0a3 3 0 10-2.222-2.518m2.222 2.518a3 3 0 11-2.222 2.518m0 0L8.684 13.24" />
+            </svg>
+          </button>
+        </div>
       </div>
     );
   };
@@ -1047,6 +1113,8 @@ export default function App() {
           value={markdown}
           onChange={(e) => handleMarkdownChange(e.target.value, side, e.nativeEvent)}
           onPaste={handleMarkdownPaste}
+          onScroll={handleScroll}
+          onClick={handleContentClick}
           placeholder="在此處輸入或貼上您的 Markdown 內容..."
           className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200 overflow-y-auto animate-fade-in"
         />
@@ -1057,6 +1125,8 @@ export default function App() {
           ref={elementRef}
           value={html}
           onChange={(e) => handleHtmlChange(e.target.value, side)}
+          onScroll={handleScroll}
+          onClick={handleContentClick}
           placeholder="在此處輸入或貼上您的 HTML 原始碼..."
           className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200 overflow-y-auto animate-fade-in"
         />
@@ -1066,6 +1136,8 @@ export default function App() {
       return (
         <div 
           ref={elementRef}
+          onScroll={handleScroll}
+          onClick={handleContentClick}
           className="w-full h-full overflow-y-auto p-4 md:p-6 flex flex-col animate-fade-in"
         >
           {/* Double Click Edit Guide Info Banner */}
@@ -1157,7 +1229,7 @@ export default function App() {
 
         {/* PDF Export Buttons */}
         {isReading && (
-          <div className="relative flex items-center rounded-lg bg-indigo-50/50 dark:bg-indigo-950/20 p-0.5 border border-indigo-200/30 dark:border-indigo-900/30">
+          <div className="relative hidden sm:flex items-center rounded-lg bg-indigo-50/50 dark:bg-indigo-950/20 p-0.5 border border-indigo-200/30 dark:border-indigo-900/30">
             <button
               onClick={() => handleExportPDF('download')}
               className="px-2 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:bg-white dark:hover:bg-slate-800 rounded transition-all flex items-center gap-1"
@@ -1231,7 +1303,7 @@ export default function App() {
     <div className="flex flex-col h-screen lg:h-screen min-h-screen bg-slate-50 dark:bg-slate-950 font-sans transition-colors duration-200 overflow-visible lg:overflow-hidden">
       
       {/* --- HEADER NAVBAR --- */}
-      <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 glass shadow-sm shrink-0">
+      <header className={`sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 glass shadow-sm shrink-0 transition-all duration-300 transform ${showToolbars ? 'translate-y-0 opacity-100' : 'md:translate-y-0 md:opacity-100 -translate-y-full opacity-0 h-0 overflow-hidden pointer-events-none'}`}>
         <div className="max-w-[1600px] mx-auto px-4 py-3.5 flex flex-wrap gap-4 items-center justify-between">
           {/* Logo Title */}
           <div className="flex items-center gap-3">
@@ -1354,13 +1426,13 @@ export default function App() {
       </header>
 
       {/* --- MAIN WORKSPACE --- */}
-      <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 py-4 md:py-6 flex flex-col min-h-0 overflow-y-auto lg:overflow-hidden animate-fade-in">
+      <main className={`flex-1 max-w-[1600px] w-full mx-auto flex flex-col min-h-0 overflow-y-auto lg:overflow-hidden animate-fade-in transition-all duration-300 ${showToolbars ? 'px-4 py-4 md:py-6' : 'md:px-4 md:py-4 lg:py-6 px-0 py-0'}`}>
         
         {layout === 'single' ? (
           /* --- SINGLE COLUMN LAYOUT --- */
-          <div className="flex flex-col flex-1 h-[calc(100vh-200px)] md:h-[calc(100vh-220px)] lg:h-[calc(100vh-180px)] border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm overflow-hidden transition-all duration-200">
+          <div className={`flex flex-col flex-1 transition-all duration-300 ${showToolbars ? 'h-[calc(100vh-200px)] md:h-[calc(100vh-220px)] lg:h-[calc(100vh-180px)] border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm' : 'h-[100vh] border-0 rounded-none bg-white dark:bg-slate-900'} overflow-hidden`}>
             {/* Column Toolbar with Segmented Tab Buttons */}
-            <div className="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between shrink-0">
+            <div className={`px-4 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between shrink-0 transition-all duration-300 ${showToolbars ? 'translate-y-0 opacity-100 py-3 h-auto' : 'md:translate-y-0 md:opacity-100 md:py-3 md:h-auto -translate-y-4 opacity-0 h-0 py-0 overflow-hidden pointer-events-none'}`}>
               <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                 <span className="text-xs font-bold text-slate-400 tracking-wider uppercase mr-1">切換視角</span>
                 <div className="flex items-center rounded-xl bg-slate-150 dark:bg-slate-950 p-0.5 border border-slate-200/60 dark:border-slate-800/60">
@@ -1388,7 +1460,7 @@ export default function App() {
                     雙擊內容可直接修改
                   </span>
                 )}
-                {singlePane === 'reading' && renderParagraphDropdown()}
+                {renderReadingHeaderControls(singlePane)}
                 {renderPanelUtilityButtons(singlePane, 'single-pane-util')}
               </div>
             </div>
@@ -1403,8 +1475,8 @@ export default function App() {
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 min-h-0">
             
             {/* Left Pane Card */}
-            <div className="flex flex-col h-[500px] md:h-[600px] lg:h-full border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm overflow-hidden transition-all duration-200">
-              <div className="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between shrink-0">
+            <div className={`flex flex-col transition-all duration-300 ${showToolbars ? 'h-[500px] md:h-[600px] lg:h-full border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm' : 'h-[50vh] border-0 rounded-none bg-white dark:bg-slate-900'} overflow-hidden`}>
+              <div className={`px-4 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between shrink-0 transition-all duration-300 ${showToolbars ? 'translate-y-0 opacity-100 py-3 h-auto' : 'md:translate-y-0 md:opacity-100 md:py-3 md:h-auto -translate-y-4 opacity-0 h-0 py-0 overflow-hidden pointer-events-none'}`}>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-400 tracking-wider uppercase">左欄</span>
                   <select 
@@ -1423,7 +1495,7 @@ export default function App() {
                       💡 雙擊直接修改
                     </span>
                   )}
-                  {leftPane === 'reading' && renderParagraphDropdown()}
+                  {renderReadingHeaderControls(leftPane)}
                   {renderPanelUtilityButtons(leftPane, 'left-pane-util')}
                 </div>
               </div>
@@ -1433,8 +1505,8 @@ export default function App() {
             </div>
 
             {/* Right Pane Card */}
-            <div className="flex flex-col h-[500px] md:h-[600px] lg:h-full border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm overflow-hidden transition-all duration-200">
-              <div className="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between shrink-0">
+            <div className={`flex flex-col transition-all duration-300 ${showToolbars ? 'h-[500px] md:h-[600px] lg:h-full border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm' : 'h-[50vh] border-0 rounded-none bg-white dark:bg-slate-900'} overflow-hidden`}>
+              <div className={`px-4 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between shrink-0 transition-all duration-300 ${showToolbars ? 'translate-y-0 opacity-100 py-3 h-auto' : 'md:translate-y-0 md:opacity-100 md:py-3 md:h-auto -translate-y-4 opacity-0 h-0 py-0 overflow-hidden pointer-events-none'}`}>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-400 tracking-wider uppercase">右欄</span>
                   <select 
@@ -1453,7 +1525,7 @@ export default function App() {
                       💡 雙擊直接修改
                     </span>
                   )}
-                  {rightPane === 'reading' && renderParagraphDropdown()}
+                  {renderReadingHeaderControls(rightPane)}
                   {renderPanelUtilityButtons(rightPane, 'right-pane-util')}
                 </div>
               </div>
@@ -1467,7 +1539,7 @@ export default function App() {
       </main>
 
       {/* --- FOOTER STATUS --- */}
-      <footer className="w-full border-t border-slate-200 dark:border-slate-900 px-4 py-3 bg-slate-50 dark:bg-slate-955 text-center text-xs text-slate-400 font-medium shrink-0">
+      <footer className={`w-full border-t border-slate-200 dark:border-slate-900 px-4 bg-slate-50 dark:bg-slate-955 text-center text-xs text-slate-400 font-medium shrink-0 transition-all duration-300 ${showToolbars ? 'translate-y-0 opacity-100 py-3 h-auto' : 'md:translate-y-0 md:opacity-100 md:py-3 md:h-auto translate-y-full opacity-0 h-0 py-0 overflow-hidden pointer-events-none'}`}>
         <div className="max-w-[1600px] mx-auto flex flex-col sm:flex-row gap-2 items-center justify-between">
           <p>© 2026 萬能 Markdown 編輯轉換器. Powered by React & Tailwind CSS.</p>
           <div className="flex gap-4 items-center">
