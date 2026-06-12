@@ -147,6 +147,7 @@ export default function App() {
   const [slices, setSlices] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [zipProgress, setZipProgress] = useState(null);
+  const [shareStatus, setShareStatus] = useState(null); // null | 'sharing' | 'success' | 'error' | 'unsupported'
 
   // --- Dark Mode State ---
   const [darkMode, setDarkMode] = useState(() => {
@@ -259,23 +260,6 @@ export default function App() {
     }, 400);
   };
 
-  // 3. Triggered by editing in Reading View (contentEditable)
-  const handleReadingInput = (e) => {
-    activePaneRef.current = 'reading';
-    const innerHTML = e.currentTarget.innerHTML;
-    
-    // Sync other states, but NOT readingHtml (to preserve caret focus)
-    setHtml(innerHTML);
-    const convertedMD = turndownService.turndown(innerHTML);
-    setMarkdown(convertedMD);
-
-    // Debounce history additions
-    if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current);
-    historyTimeoutRef.current = setTimeout(() => {
-      pushToHistory(convertedMD);
-    }, 400);
-  };
-
   // Double click event on Reading View
   const handleReadingDoubleClick = () => {
     setIsReadingEditable(true);
@@ -287,7 +271,8 @@ export default function App() {
     }, 30);
   };
 
-  // When focus leaves Reading view, do final sync & close edit mode
+  // When focus leaves Reading view (Blur), we execute the final synchronization.
+  // This completely resolves Android Chrome virtual keyboard layout/composition and Backspace bugs by avoiding re-renders while typing.
   const handleReadingBlur = (e) => {
     setIsReadingEditable(false);
     const innerHTML = e.currentTarget.innerHTML;
@@ -317,7 +302,6 @@ export default function App() {
       if (readingViewRef.current) {
         copyText = readingViewRef.current.innerText;
       } else {
-        // Strip tags fallback
         copyText = html.replace(/<[^>]*>/g, '');
       }
     }
@@ -337,7 +321,6 @@ export default function App() {
       } else if (type === 'html') {
         handleHtmlChange(text);
       } else if (type === 'reading') {
-        // Parse markdown if pasted as plain text, or inject directly
         const parsedHTML = marked.parse(text);
         setHtml(parsedHTML);
         setMarkdown(text);
@@ -358,19 +341,29 @@ export default function App() {
     setShowConfirmClear(false);
   };
 
-  // --- Slicing & Export Logic ---
+  // --- Slicing, Export & Share Logic ---
+
+  // Helper to format filenames following rule: md2pic_yyyymmddssss
+  const getTimestampString = () => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const secs = String(now.getSeconds()).padStart(2, '0');
+    const ms = String(now.getMilliseconds()).padStart(3, '0').slice(0, 2);
+    // ssss is constructed using seconds (2-digit) and milliseconds (2-digit)
+    const ssss = secs + ms;
+    return `${yyyy}${mm}${dd}${ssss}`;
+  };
 
   const handleGenerateSlices = async () => {
     setIsGenerating(true);
     setSlices([]);
     try {
-      // Small delay to ensure modal options finish rendering
       await new Promise(resolve => setTimeout(resolve, 200));
-      
       const element = document.getElementById('export-capture-area');
       if (!element) return;
 
-      // Capture element with html2canvas
       const canvas = await html2canvas(element, {
         useCORS: true,
         scale: 2, // 2x high-resolution rendering
@@ -381,11 +374,13 @@ export default function App() {
       const mainWidth = canvas.width;
       const mainHeight = canvas.height;
       const generated = [];
+      const ts = getTimestampString();
+      const prefix = `md2pic_${ts}`;
 
       if (sliceMode === 'full') {
         const url = canvas.toDataURL('image/png');
         generated.push({
-          name: 'full_document.png',
+          name: `${prefix}.png`,
           url,
           width: mainWidth / 2,
           height: mainHeight / 2
@@ -406,7 +401,7 @@ export default function App() {
           
           const url = sliceCanvas.toDataURL('image/png');
           generated.push({
-            name: `slice_part_${i + 1}.png`,
+            name: `${prefix}_${i + 1}.png`,
             url,
             width: mainWidth / 2,
             height: currentHeight / 2
@@ -414,7 +409,7 @@ export default function App() {
         }
       } else if (sliceMode === 'height') {
         const targetHeight = Math.max(100, parseInt(fixedHeight) || 800);
-        const scaledHeight = targetHeight * 2; // match canvas scale = 2
+        const scaledHeight = targetHeight * 2;
         
         let currentY = 0;
         let index = 1;
@@ -430,7 +425,7 @@ export default function App() {
           
           const url = sliceCanvas.toDataURL('image/png');
           generated.push({
-            name: `slice_height_${index}.png`,
+            name: `${prefix}_${index}.png`,
             url,
             width: mainWidth / 2,
             height: currentHeight / 2
@@ -453,8 +448,7 @@ export default function App() {
     setZipProgress('正在封裝壓縮檔...');
     try {
       const zip = new JSZip();
-      slices.forEach((slice, index) => {
-        // Extract raw base64 data from URL
+      slices.forEach((slice) => {
         const base64Data = slice.url.split(',')[1];
         zip.file(slice.name, base64Data, { base64: true });
       });
@@ -462,7 +456,7 @@ export default function App() {
       const blobContent = await zip.generateAsync({ type: 'blob' });
       const downloadLink = document.createElement('a');
       downloadLink.href = URL.createObjectURL(blobContent);
-      downloadLink.download = `universal_markdown_slices_${Date.now()}.zip`;
+      downloadLink.download = `md2pic_zip_${getTimestampString()}.zip`;
       downloadLink.click();
     } catch (err) {
       console.error('Failed to create ZIP: ', err);
@@ -471,16 +465,72 @@ export default function App() {
     }
   };
 
-  // Helper render to display characters count
+  // Web Share API to send multiple sliced files directly to messaging apps like Line
+  const handleShare = async () => {
+    if (slices.length === 0) return;
+    setShareStatus('sharing');
+    try {
+      const filesArray = [];
+      for (const slice of slices) {
+        const response = await fetch(slice.url);
+        const blob = await response.blob();
+        const file = new File([blob], slice.name, { type: 'image/png' });
+        filesArray.push(file);
+      }
+
+      if (navigator.canShare && navigator.canShare({ files: filesArray })) {
+        await navigator.share({
+          files: filesArray,
+          title: 'Markdown 切片圖片匯出',
+          text: '使用「萬能 Markdown 編輯轉換器」匯出的切割圖片。'
+        });
+        setShareStatus('success');
+        setTimeout(() => setShareStatus(null), 2000);
+      } else {
+        setShareStatus('unsupported');
+        setTimeout(() => setShareStatus(null), 4000);
+      }
+    } catch (err) {
+      console.error('Web Share failed: ', err);
+      if (err.name !== 'AbortError') {
+        setShareStatus('error');
+        setTimeout(() => setShareStatus(null), 3000);
+      } else {
+        setShareStatus(null);
+      }
+    }
+  };
+
+  // Web Share API to share a single slice
+  const handleShareSingle = async (slice) => {
+    try {
+      const response = await fetch(slice.url);
+      const blob = await response.blob();
+      const file = new File([blob], slice.name, { type: 'image/png' });
+      
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: '分享單張圖片',
+          text: `分享切片圖片：${slice.name}`
+        });
+      } else {
+        alert('您的瀏覽器/裝置不支援 Web Share 檔案分享功能。請手動下載。');
+      }
+    } catch (err) {
+      console.error('Share single failed: ', err);
+    }
+  };
+
   const getCharCount = (str) => {
     return str ? str.length : 0;
   };
 
   return (
-    <div className="flex flex-col h-full min-h-screen bg-slate-50 dark:bg-slate-950 font-sans transition-colors duration-200">
+    <div className="flex flex-col h-screen lg:h-screen min-h-screen bg-slate-50 dark:bg-slate-950 font-sans transition-colors duration-200 overflow-visible lg:overflow-hidden">
       
       {/* --- HEADER NAVBAR --- */}
-      <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 glass shadow-sm">
+      <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 glass shadow-sm shrink-0">
         <div className="max-w-[1600px] mx-auto px-4 py-3.5 flex flex-wrap gap-4 items-center justify-between">
           {/* Logo Title */}
           <div className="flex items-center gap-3">
@@ -538,7 +588,7 @@ export default function App() {
               </button>
               <button 
                 onClick={() => setLayout('double')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${layout === 'double' ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-850'}`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${layout === 'double' ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-855'}`}
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <rect x="3" y="3" width="8" height="18" rx="1.5" strokeWidth="2.5" />
@@ -564,7 +614,6 @@ export default function App() {
             <button 
               onClick={() => {
                 setShowExportModal(true);
-                // Pre-generate preview right away
                 setTimeout(handleGenerateSlices, 105);
               }}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-750 shadow-md shadow-indigo-500/10 hover:shadow-indigo-500/20 active:scale-[0.98] transition-all"
@@ -597,24 +646,30 @@ export default function App() {
       </header>
 
       {/* --- MAIN WORKSPACE --- */}
-      <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 py-4 md:py-6 flex flex-col min-h-0">
+      <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 py-4 md:py-6 flex flex-col min-h-0 overflow-y-auto lg:overflow-hidden">
         
         {layout === 'single' ? (
           /* --- SINGLE COLUMN LAYOUT --- */
-          <div className="flex flex-col flex-1 min-h-[500px] border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm overflow-hidden transition-all duration-200">
-            {/* Column Toolbar */}
-            <div className="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-400 tracking-wider uppercase">顯示面板</span>
-                <select 
-                  value={singlePane}
-                  onChange={(e) => setSinglePane(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-850 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-slate-100"
-                >
-                  <option value="markdown">Markdown 編輯格式</option>
-                  <option value="html">HTML 原始碼編輯</option>
-                  <option value="reading">美化閱讀排版 (可編輯)</option>
-                </select>
+          <div className="flex flex-col flex-1 h-[calc(100vh-200px)] md:h-[calc(100vh-220px)] lg:h-[calc(100vh-180px)] border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm overflow-hidden transition-all duration-200">
+            {/* Column Toolbar with Segmented Buttons instead of Dropdown */}
+            <div className="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                <span className="text-xs font-bold text-slate-400 tracking-wider uppercase mr-1">切換視角</span>
+                <div className="flex items-center rounded-xl bg-slate-150 dark:bg-slate-950 p-0.5 border border-slate-200/60 dark:border-slate-800/60">
+                  {[
+                    { key: 'markdown', label: 'Markdown 編輯' },
+                    { key: 'html', label: 'HTML 原始碼' },
+                    { key: 'reading', label: '美化閱讀排版' }
+                  ].map(btn => (
+                    <button
+                      key={btn.key}
+                      onClick={() => setSinglePane(btn.key)}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${singlePane === btn.key ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-850'}`}
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="flex items-center gap-1.5">
                 {singlePane === 'reading' && (
@@ -630,7 +685,7 @@ export default function App() {
             </div>
             
             {/* Workspace Area */}
-            <div className="flex-1 min-h-0 relative">
+            <div className="flex-1 min-h-0 relative overflow-hidden">
               {renderWorkspaceContent(singlePane)}
             </div>
           </div>
@@ -639,8 +694,8 @@ export default function App() {
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 min-h-0">
             
             {/* Left Pane Card */}
-            <div className="flex flex-col border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm overflow-hidden transition-all duration-200">
-              <div className="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between">
+            <div className="flex flex-col h-[500px] md:h-[600px] lg:h-full border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm overflow-hidden transition-all duration-200">
+              <div className="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-400 tracking-wider uppercase">左欄</span>
                   <select 
@@ -662,14 +717,14 @@ export default function App() {
                   {renderPanelUtilityButtons(leftPane, 'left-pane-util')}
                 </div>
               </div>
-              <div className="flex-1 min-h-0 relative">
+              <div className="flex-1 min-h-0 relative overflow-hidden">
                 {renderWorkspaceContent(leftPane)}
               </div>
             </div>
 
             {/* Right Pane Card */}
-            <div className="flex flex-col border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm overflow-hidden transition-all duration-200">
-              <div className="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between">
+            <div className="flex flex-col h-[500px] md:h-[600px] lg:h-full border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm overflow-hidden transition-all duration-200">
+              <div className="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-400 tracking-wider uppercase">右欄</span>
                   <select 
@@ -691,7 +746,7 @@ export default function App() {
                   {renderPanelUtilityButtons(rightPane, 'right-pane-util')}
                 </div>
               </div>
-              <div className="flex-1 min-h-0 relative">
+              <div className="flex-1 min-h-0 relative overflow-hidden">
                 {renderWorkspaceContent(rightPane)}
               </div>
             </div>
@@ -701,7 +756,7 @@ export default function App() {
       </main>
 
       {/* --- FOOTER STATUS --- */}
-      <footer className="w-full border-t border-slate-200 dark:border-slate-900 px-4 py-3 bg-slate-50 dark:bg-slate-950 text-center text-xs text-slate-400 font-medium">
+      <footer className="w-full border-t border-slate-200 dark:border-slate-900 px-4 py-3 bg-slate-50 dark:bg-slate-950 text-center text-xs text-slate-400 font-medium shrink-0">
         <div className="max-w-[1600px] mx-auto flex flex-col sm:flex-row gap-2 items-center justify-between">
           <p>© 2026 萬能 Markdown 編輯轉換器. Powered by React & Tailwind CSS.</p>
           <div className="flex gap-4 items-center">
@@ -777,7 +832,7 @@ export default function App() {
                     </button>
                     <button
                       onClick={() => { setExportTheme('dark'); setSlices([]); }}
-                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold transition-all ${exportTheme === 'dark' ? 'border-indigo-500 bg-white dark:bg-slate-805 text-indigo-600 dark:text-indigo-400 ring-2 ring-indigo-500/10 shadow-sm' : 'border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-855'}`}
+                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold transition-all ${exportTheme === 'dark' ? 'border-indigo-500 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 ring-2 ring-indigo-500/10 shadow-sm' : 'border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-855'}`}
                     >
                       <span className="w-3.5 h-3.5 rounded-full bg-slate-950 border border-slate-800"></span>
                       質感暗黑
@@ -881,25 +936,38 @@ export default function App() {
             {/* Modal Preview Canvas & Downloads Grid (Right) */}
             <div className="flex-1 p-6 flex flex-col justify-between overflow-hidden bg-slate-100 dark:bg-slate-950">
               
-              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-900 pb-3">
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-900 pb-3 flex-wrap gap-2">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">切片結果預覽 ({slices.length} 張圖)</span>
                 {slices.length > 0 && (
-                  <button
-                    onClick={handleDownloadZip}
-                    disabled={zipProgress !== null}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 shadow-md shadow-emerald-500/10 active:scale-95 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500 transition-all"
-                  >
-                    {zipProgress ? (
-                      zipProgress
-                    ) : (
-                      <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        一鍵批次打包下載 (ZIP)
-                      </>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Share all slices via Web Share API */}
+                    <button
+                      onClick={handleShare}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-500 hover:bg-indigo-600 shadow-md shadow-indigo-500/10 active:scale-95 transition-all"
+                    >
+                      {shareStatus === 'sharing' ? '傳送中...' :
+                       shareStatus === 'success' ? '分享成功!' :
+                       shareStatus === 'error' ? '分享失敗' :
+                       shareStatus === 'unsupported' ? '裝置不支援分享多圖' : '一鍵社群分享多圖'}
+                    </button>
+                    {/* ZIP download button */}
+                    <button
+                      onClick={handleDownloadZip}
+                      disabled={zipProgress !== null}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 shadow-md shadow-emerald-500/10 active:scale-95 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500 transition-all"
+                    >
+                      {zipProgress ? (
+                        zipProgress
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          打包下載 (ZIP)
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -920,20 +988,26 @@ export default function App() {
                     {slices.map((slice, i) => (
                       <div key={i} className="flex flex-col border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                         {/* Image Preview Container */}
-                        <div className="flex-1 bg-slate-200 dark:bg-slate-955/80 p-2 flex items-center justify-center min-h-[160px] max-h-[200px] overflow-hidden relative group">
+                        <div className="flex-1 bg-slate-200 dark:bg-slate-950/80 p-2 flex items-center justify-center min-h-[160px] max-h-[200px] overflow-hidden relative group">
                           <img 
                             src={slice.url} 
                             alt={slice.name} 
                             className="max-w-full max-h-full object-contain rounded-md shadow-sm border border-slate-200/20" 
                           />
-                          <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-2 items-center justify-center">
                             <a
                               href={slice.url}
                               download={slice.name}
-                              className="px-3.5 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-650 text-white font-semibold text-[11px] shadow-sm transition-all"
+                              className="px-3.5 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-[11px] shadow-sm transition-all text-center w-24"
                             >
                               單張下載
                             </a>
+                            <button
+                              onClick={() => handleShareSingle(slice)}
+                              className="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-[11px] shadow-sm transition-all text-center w-24"
+                            >
+                              社群分享
+                            </button>
                           </div>
                         </div>
                         {/* Info details */}
@@ -987,8 +1061,7 @@ export default function App() {
           value={markdown}
           onChange={(e) => handleMarkdownChange(e.target.value)}
           placeholder="在此處輸入或貼上您的 Markdown 內容..."
-          className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-805 dark:text-slate-200"
-          style={{ minHeight: 'calc(100vh - 250px)' }}
+          className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-205 overflow-y-auto"
         />
       );
     } else if (paneType === 'html') {
@@ -997,38 +1070,40 @@ export default function App() {
           value={html}
           onChange={(e) => handleHtmlChange(e.target.value)}
           placeholder="在此處輸入或貼上您的 HTML 原始碼..."
-          className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-805 dark:text-slate-200"
-          style={{ minHeight: 'calc(100vh - 250px)' }}
+          className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-205 overflow-y-auto"
         />
       );
     } else if (paneType === 'reading') {
       return (
-        <div 
-          className="w-full h-full overflow-y-auto p-4 md:p-6"
-          style={{ minHeight: 'calc(100vh - 250px)' }}
-        >
+        <div className="w-full h-full overflow-y-auto p-4 md:p-6 flex flex-col">
           {/* Double Click Edit Guide Info Banner */}
           {!isReadingEditable && (
-            <div className="mb-4 text-[10px] text-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-950/40 rounded-lg px-2.5 py-1.5 flex items-center justify-between select-none">
+            <div className="mb-4 shrink-0 text-[10px] text-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-950/40 rounded-lg px-2.5 py-1.5 flex items-center justify-between select-none">
               <span className="flex items-center gap-1.5">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                 </svg>
-                提示：下方雙擊進入直覺式 contentEditable 編輯模式，點擊外部自動儲存。
+                提示：下方雙擊進入直覺式編輯模式。
               </span>
               <span className="font-semibold uppercase tracking-wider text-[9px] bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded">唯讀</span>
             </div>
           )}
 
           {isReadingEditable && (
-            <div className="mb-4 text-[10px] text-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-100/50 dark:border-emerald-950/40 rounded-lg px-2.5 py-1.5 flex items-center justify-between animate-pulse select-none">
-              <span className="flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-                </svg>
-                編輯中... 游標直接點擊文字修改內容，點擊別處以同步到其它編輯器。
+            <div className="mb-4 shrink-0 text-[10px] text-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-100/50 dark:border-emerald-950/40 rounded-lg px-2.5 py-1.5 flex items-center justify-between animate-pulse select-none">
+              <span className="flex items-center gap-1.5 font-bold">
+                ✏️ 編輯中 (點擊文字直接修改)
               </span>
-              <span className="font-semibold uppercase tracking-wider text-[9px] bg-emerald-100 dark:bg-emerald-900/50 px-1.5 py-0.5 rounded text-emerald-600 dark:text-emerald-400">編輯中</span>
+              <button
+                onClick={() => {
+                  if (readingViewRef.current) {
+                    readingViewRef.current.blur(); // Blurring invokes handleReadingBlur & syncs
+                  }
+                }}
+                className="px-2.5 py-0.5 rounded bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[9px] shadow-sm transition-all"
+              >
+                儲存並完成編輯
+              </button>
             </div>
           )}
 
@@ -1036,11 +1111,10 @@ export default function App() {
           <div
             ref={readingViewRef}
             contentEditable={isReadingEditable}
-            onInput={handleReadingInput}
             onBlur={handleReadingBlur}
             onDoubleClick={handleReadingDoubleClick}
             suppressContentEditableWarning
-            className={`preview-prose focus:outline-none min-h-[400px] h-full ${isReadingEditable ? 'ring-2 ring-indigo-500/20 rounded-xl p-2 bg-slate-50/50 dark:bg-slate-900/50 border border-indigo-200/30 dark:border-indigo-900/20' : ''}`}
+            className={`flex-1 preview-prose focus:outline-none min-h-[300px] pb-12 ${isReadingEditable ? 'ring-2 ring-indigo-500/20 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-900/50 border border-indigo-200/30 dark:border-indigo-900/20' : ''}`}
             dangerouslySetInnerHTML={{ __html: readingHtml }}
             data-placeholder="無內容。在此處雙擊或輸入文字，或在左邊編寫 Markdown..."
           />
@@ -1096,10 +1170,28 @@ export default function App() {
           title="從系統剪貼簿貼上文字並同步"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 00-2 2v12a2 2 0 002-2v-3" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2v-3" />
           </svg>
           <span>貼上</span>
         </button>
+
+        {/* Clear Button (Clear specific panel, added on Single Column & Left Column next to Paste) */}
+        {(uniqueKey === 'left-pane-util' || uniqueKey === 'single-pane-util') && (
+          <button
+            onClick={() => {
+              if (paneType === 'markdown') handleMarkdownChange('');
+              else if (paneType === 'html') handleHtmlChange('');
+              else if (paneType === 'reading') handleHtmlChange('');
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 border border-rose-200/50 dark:border-rose-950 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-all"
+            title="清除此面板內容"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span>清除</span>
+          </button>
+        )}
       </div>
     );
   }
