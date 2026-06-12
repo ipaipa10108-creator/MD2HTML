@@ -1,16 +1,141 @@
-# React + Vite
+# 🚀 萬能 Markdown 編輯轉換器 | Universal Markdown Editor Converter
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+[繁體中文](#繁體中文說明書) | [English](#english-user-manual)
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 繁體中文說明書
 
-## React Compiler
+歡迎使用 **萬能 Markdown 編輯轉換器**！這是一個基於 Vite、React 與 Tailwind CSS 打造的極致美觀、高效單頁網頁應用程式 (SPA)。本專案支援 PWA 漸進式網頁應用安裝、強大的多終端即時同步，並針對行動端與電腦端社群軟體分享進行了深度最佳化。
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 🌟 核心特色功能
 
-## Expanding the ESLint configuration
+1. **三向即時互轉同步**
+   - **Markdown 編輯區**、**HTML 原始碼編輯區** 與 **美化閱讀排版區** 三者無縫即時同步。
+   - 雙擊「美化閱讀排版」即可啟用 `contentEditable` 直覺式編輯，直接點擊文字即可修改。
+   - 針對 Android/iOS 行動端輸入法與 Backspace 退格鍵進行了防抖設計，僅在您離開編輯（Blur）或點擊「儲存」時觸獲同步，確保在手機上打字 100% 順暢不跳游標。
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+2. **智慧圖片匯出與自由切片**
+   - 整合 `html2canvas`，將您的文件渲染成 crisp 高清 2x 圖片。
+   - 支援 **整頁輸出**、**按張數均等裁切** 或 **按固定像素高度裁切**。
+   - 支援選擇「極簡白」或「質感暗黑」背景風格。
+   - 各切片圖片皆具備獨立勾選框，您可以自由選擇想要處理的圖片。
+   - **一鍵打包下載**：將所選圖片自動壓縮為 ZIP 壓縮檔。
+
+3. **深度社群分享優化 (針對 LINE / Desktop / Mobile)**
+   - **一鍵社群分享多圖**：在支援的行動裝置上，可直接呼叫系統分享傳送多張選定切片至 LINE、Messenger 等。
+   - **剪貼簿圖片複製 (最佳 PC / LINE 方案)**：因大部分電腦與部分手機沙盒限制無法直接以網頁傳送二進位圖片檔，本程式提供「複製圖片」按鈕。點擊後圖片將自動存入剪貼簿，您只需直接在 LINE 對話框按下 **Ctrl + V (或長按貼上)** 即可 100% 傳送圖片，極速又穩定。
+
+4. **PWA 捷徑與書籤支援**
+   - 具備專屬的現代漸層色向量圖標 (`favicon.svg`) 與 Web Manifest 機制。
+   - 支援將此工具「新增至手機主畫面」，作為獨立 App 啟動，離線或書籤引導更為專業美觀。
+
+5. **歷史記錄管理 (Undo/Redo)**
+   - 內建 400ms 輸入防抖機制，自動記錄您的編輯歷史，支援無限次「上一步」與「下一步」。
+
+6. **客製化毛玻璃確認 Modal**
+   - 捨棄會被沙盒阻擋的 `window.confirm`，改用全客製的毛玻璃視覺警告視窗，體驗更高級。
+
+---
+
+### 📦 安裝與本地開發
+
+請確保您已安裝 [Node.js](https://nodejs.org/)。
+
+1. **複製專案並安裝依賴**
+   ```bash
+   npm install
+   ```
+2. **啟動開發伺服器**
+   ```bash
+   npm run dev
+   ```
+3. **編譯打包專案**
+   ```bash
+   npm run build
+   ```
+
+---
+
+### 🚀 一鍵部署至 GitHub Pages
+
+本專案已完整配置 `gh-pages` 與相對路徑。
+
+1. 將您的本地 Git 倉庫關聯至 GitHub：
+   ```bash
+   git remote add origin https://github.com/您的帳號/您的倉庫名.git
+   ```
+2. 執行一鍵部署指令，它會自動打包並推送到遠端 `gh-pages` 分支：
+   ```bash
+   npm run deploy
+   ```
+
+---
+
+<br/>
+
+## English User Manual
+
+Welcome to the **Universal Markdown Editor Converter**! This is a visually stunning, highly efficient Single-Page Application (SPA) built with Vite, React, and Tailwind CSS. It supports Progressive Web App (PWA) installation, powerful multi-pane real-time synchronization, and is heavily optimized for desktop and mobile social sharing (e.g., LINE, Slack, Discord).
+
+### 🌟 Key Features
+
+1. **Three-Way Live Synchronization**
+   - Seamless real-time updates between the **Markdown Editor**, **HTML Source Editor**, and **Reading Layout View**.
+   - Double-click the Reading View to activate direct `contentEditable` editing.
+   - Built with debounce mechanics for Android/iOS virtual keyboards, triggering state synchronization only upon `onBlur` (when clicking away or tapping "Save"), completely eliminating caret jumps or keyboard dismissal bugs on mobile.
+
+2. **Smart Image Export & Custom Slicing**
+   - Powered by `html2canvas` to render high-definition 2x resolution captures of your document.
+   - Slicing modes: **Full Document**, **Equal Slicing (by page count)**, or **Fixed Height Slicing (by pixels)**.
+   - Choose between "Minimalist Light" (white) or "Chic Dark" (dark navy) background styles.
+   - Checkboxes are provided on each slice thumbnail, letting you choose exactly which images to process.
+   - **Download selected slices as a ZIP**: Instantly bundle selected slices into a zip file.
+
+3. **Deep Social Share Optimization (PC & LINE Compatibility)**
+   - **Share Selected Slices**: Directly invokes the system Web Share dialog on supported mobile OS to send multiple sliced files to apps like LINE or Messenger.
+   - **Copy Image to Clipboard**: Web Share API file-transfers often fail on desktop clients due to OS-level sandboxing. We provide a **"Copy Image"** button that writes the raw PNG blob directly to the clipboard. Simply press **Ctrl + V (or long press paste)** inside LINE, Discord, or WeChat to send the image instantly.
+
+4. **PWA & Desktop Shortcut Ready**
+   - Equipped with a custom gradient vector icon (`favicon.svg`) and a Web App Manifest.
+   - Easily install the editor to your mobile homescreen or desktop browser shortcuts for a native, app-like standalone experience.
+
+5. **History Management (Undo/Redo)**
+   - Features a 400ms debounced state stack, allowing you to seamlessly step backward and forward through your edits.
+
+6. **Custom Frosted Glass Confirmation Dialogs**
+   - Replaced standard browser blockages like `window.confirm` with smooth, glassmorphic warnings that elevate the premium feel.
+
+---
+
+### 📦 Setup & Local Development
+
+Make sure you have [Node.js](https://nodejs.org/) installed.
+
+1. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+2. **Start Dev Server**
+   ```bash
+   npm run dev
+   ```
+3. **Build Production Assets**
+   ```bash
+   npm run build
+   ```
+
+---
+
+### 🚀 Deploying to GitHub Pages
+
+The project is fully pre-configured with relative paths and deployment scripts.
+
+1. Connect your local directory to your GitHub remote repository:
+   ```bash
+   git remote add origin https://github.com/<your-username>/<your-repo-name>.git
+   ```
+2. Run the deployment command. It compiles your project and publishes the distribution files directly to the remote `gh-pages` branch:
+   ```bash
+   npm run deploy
+   ```
