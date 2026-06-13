@@ -1,4 +1,4 @@
-const CACHE_NAME = 'md2html-v1';
+const CACHE_NAME = 'md2html-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -72,6 +72,29 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
+  // Network-First for HTML/root pages to ensure users get the latest updates
+  const isHtml = url.pathname.endsWith('index.html') || url.pathname === '/' || url.pathname.endsWith('/');
+  if (isHtml) {
+    e.respondWith(
+      fetch(e.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(e.request, responseToCache);
+          });
+        }
+        return networkResponse;
+      }).catch(() => {
+        return caches.match(e.request).then((cachedResponse) => {
+          if (cachedResponse) return cachedResponse;
+          return caches.match('./index.html');
+        });
+      })
+    );
+    return;
+  }
+
+  // Cache-First for static assets (JS, CSS, images)
   e.respondWith(
     caches.match(e.request).then((cachedResponse) => {
       if (cachedResponse) {
