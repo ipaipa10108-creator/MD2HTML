@@ -22,18 +22,23 @@
    - 各切片圖片皆具備獨立勾選框，您可以自由選擇想要處理的圖片。
    - **一鍵打包下載**：將所選圖片自動壓縮為 ZIP 壓縮檔。
 
-3. **深度社群分享優化 (針對 LINE / Desktop / Mobile)**
-   - **一鍵社群分享多圖**：在支援的行動裝置上，可直接呼叫系統分享傳送多張選定切片至 LINE、Messenger 等。
+3. **全新 PDF 匯出與分享（支援圖片與可選取複製文字）**
+   - **圖片版 PDF**：完美還原網頁美化排版樣式，支援單擊下載與一鍵分享。
+   - **文字版 PDF**：動態載入高級中文向量字型（**霞鶩文楷 Lite**，約 14MB），產生 **100% 可選取複製與搜尋內文** 的 PDF 文件。
+   - **整合式下拉選單**：將所有 PDF 匯出與分享選項收納至單個美觀的「PDF 匯出」下拉選單中，保持雙端介面乾淨俐落。
+
+4. **深度社群分享優化 (針對 LINE / Desktop / Mobile)**
+   - **一鍵社群分享**：在支援的行動裝置上，可直接呼叫系統分享傳送圖片/PDF 等檔案至 LINE、Messenger 等。
    - **剪貼簿圖片複製 (最佳 PC / LINE 方案)**：因大部分電腦與部分手機沙盒限制無法直接以網頁傳送二進位圖片檔，本程式提供「複製圖片」按鈕。點擊後圖片將自動存入剪貼簿，您只需直接在 LINE 對話框按下 **Ctrl + V (或長按貼上)** 即可 100% 傳送圖片，極速又穩定。
 
-4. **PWA 捷徑與書籤支援**
+5. **PWA 捷徑與書籤支援**
    - 具備專屬的現代漸層色向量圖標 (`favicon.svg`) 與 Web Manifest 機制。
    - 支援將此工具「新增至手機主畫面」，作為獨立 App 啟動，離線或書籤引導更為專業美觀。
 
-5. **歷史記錄管理 (Undo/Redo)**
+6. **歷史記錄管理 (Undo/Redo)**
    - 內建 400ms 輸入防抖機制，自動記錄您的編輯歷史，支援無限次「上一步」與「下一步」。
 
-6. **客製化毛玻璃確認 Modal**
+7. **客製化毛玻璃確認 Modal**
    - 捨棄會被沙盒阻擋的 `window.confirm`，改用全客製的毛玻璃視覺警告視窗，體驗更高級。
 
 ---
@@ -92,18 +97,23 @@ Welcome to the **Universal Markdown Editor Converter**! This is a visually stunn
    - Checkboxes are provided on each slice thumbnail, letting you choose exactly which images to process.
    - **Download selected slices as a ZIP**: Instantly bundle selected slices into a zip file.
 
-3. **Deep Social Share Optimization (PC & LINE Compatibility)**
-   - **Share Selected Slices**: Directly invokes the system Web Share dialog on supported mobile OS to send multiple sliced files to apps like LINE or Messenger.
+3. **New PDF Export & Sharing (Image & Selectable Text Versions)**
+   - **Image-based PDF**: Capture layout structure as high-definition PDF images (preserving exact CSS/HTML styling), ready for download or sharing.
+   - **Text-based PDF**: Dynamically downloads and embeds the **LXGW WenKai Lite** Chinese font (approx. 14MB) to render document text directly as vector PDF objects, ensuring **100% copyable, selectable, and searchable** text for the recipient.
+   - **Consolidated PDF Dropdown**: Condenses all PDF options into a premium, responsive dropdown menu suitable for both mobile and desktop utility bars.
+
+4. **Deep Social Share Optimization (PC & LINE Compatibility)**
+   - **Share Files**: Directly invokes the system Web Share dialog on supported mobile OS to send multiple sliced files/PDFs to apps like LINE or Messenger.
    - **Copy Image to Clipboard**: Web Share API file-transfers often fail on desktop clients due to OS-level sandboxing. We provide a **"Copy Image"** button that writes the raw PNG blob directly to the clipboard. Simply press **Ctrl + V (or long press paste)** inside LINE, Discord, or WeChat to send the image instantly.
 
-4. **PWA & Desktop Shortcut Ready**
+5. **PWA & Desktop Shortcut Ready**
    - Equipped with a custom gradient vector icon (`favicon.svg`) and a Web App Manifest.
    - Easily install the editor to your mobile homescreen or desktop browser shortcuts for a native, app-like standalone experience.
 
-5. **History Management (Undo/Redo)**
+6. **History Management (Undo/Redo)**
    - Features a 400ms debounced state stack, allowing you to seamlessly step backward and forward through your edits.
 
-6. **Custom Frosted Glass Confirmation Dialogs**
+7. **Custom Frosted Glass Confirmation Dialogs**
    - Replaced standard browser blockages like `window.confirm` with smooth, glassmorphic warnings that elevate the premium feel.
 
 ---

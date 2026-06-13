@@ -79,10 +79,14 @@ const initialMarkdown = `# 🚀 萬能 Markdown 編輯轉換器
    * 支援 **單欄模式** 或 **雙欄對照模式**。
    * 下拉選單自訂左右兩欄的內容（Markdown / HTML / 閱讀格式）。
 
-3. **智慧圖片導出與切片**：
+3. **智慧圖片匯出與自由切片**：
    * 整合 \`html2canvas\` 與 \`JSZip\`。
    * 支援**整頁輸出**、**均等張數裁切**或**固定高度裁切**。
    * 提供「極簡白」與「質感暗黑」背景風格，支援批次打包下載。
+
+4. **全新 PDF 匯出與分享（支援圖片版與文字版）**：
+   * **圖片版 PDF**：完美還原網頁美化排版樣式，支援單擊下載與一鍵分享。
+   * **文字版 PDF**：動態載入高級中文向量字型，產生 100% 可選取複製與搜尋內文的 PDF 文件。
 
 ---
 
@@ -94,7 +98,7 @@ const initialMarkdown = `# 🚀 萬能 Markdown 編輯轉換器
 | :--- | :---: | :--- |
 | 即時同步 | 100% | 支援鍵盤輸入、貼上與雙擊編輯同步 |
 | 圖片裁切 | 100% | 網頁自動生成 Canvas 圖片並封裝成 ZIP |
-| 歷史紀錄 | 105% | 自動防抖，支援無限次 Undo/Redo |
+| PDF 匯出 | 100% | 支援圖片版 PDF 與文字可複製版 PDF |
 
 ### 2. 程式碼區塊
 
@@ -179,6 +183,31 @@ const findDOMNodeByText = (root, searchText) => {
   return null;
 };
 
+// Cache variable for the dynamically loaded Chinese font
+let cachedFontBase64 = null;
+
+const fetchFontWithCache = async () => {
+  if (cachedFontBase64) return cachedFontBase64;
+  
+  const url = 'https://cdn.jsdelivr.net/gh/lxgw/LxgwWenKai-Lite@main/fonts/TTF/LXGWWenKaiLite-Regular.ttf';
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Failed to fetch font from CDN');
+  
+  const buffer = await response.arrayBuffer();
+  
+  // Safe ArrayBuffer to Base64 conversion without call stack limitations
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  const chunkSize = 65536; // 64KB chunks
+  for (let i = 0; i < len; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  
+  cachedFontBase64 = window.btoa(binary);
+  return cachedFontBase64;
+};
+
 export default function App() {
   // Check for shared content from Android Web Share Target API on Mount/Initial Render
   const sharedText = (() => {
@@ -231,6 +260,9 @@ export default function App() {
 
   // --- Toast Notification System ---
   const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
+
+  // --- PDF Dropdown State ---
+  const [activePdfDropdown, setActivePdfDropdown] = useState(null); // 'mobile-pdf' or '${uniqueKey}-pdf'
 
   // --- Dark Mode State ---
   const [darkMode, setDarkMode] = useState(() => {
@@ -772,6 +804,206 @@ export default function App() {
     }
   };
 
+  const handleExportTextPDF = async (action) => {
+    showToast('⏳ 正在載入字型並產生文字 PDF，請稍候...', 'info');
+    try {
+      // 1. Fetch Chinese font
+      const fontBase64 = await fetchFontWithCache();
+      
+      // 2. Load jsPDF
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'pt',
+        format: 'a4'
+      });
+      
+      // 3. Register and set font
+      pdf.addFileToVFS('LXGWWenKaiLite.ttf', fontBase64);
+      pdf.addFont('LXGWWenKaiLite.ttf', 'LXGWWenKaiLite', 'normal');
+      pdf.setFont('LXGWWenKaiLite');
+      
+      // 4. Set document parameters
+      const pageHeight = 841.89;
+      const pageWidth = 595.28;
+      const margin = 50;
+      const printableWidth = pageWidth - 2 * margin;
+      
+      let currentY = margin;
+      
+      const checkPageBreak = (neededHeight) => {
+        if (currentY + neededHeight > pageHeight - margin) {
+          pdf.addPage();
+          pdf.setFont('LXGWWenKaiLite');
+          currentY = margin;
+        }
+      };
+      
+      // Parse markdown text line-by-line
+      const lines = markdown.split(/\r?\n/);
+      let inCodeBlock = false;
+      
+      for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trimEnd();
+        
+        // Skip empty lines, but add vertical spacing
+        if (line.trim() === '') {
+          currentY += 12;
+          continue;
+        }
+        
+        // Code blocks block toggle
+        if (line.startsWith('```')) {
+          inCodeBlock = !inCodeBlock;
+          continue;
+        }
+        
+        if (inCodeBlock) {
+          // Inside a code block, use smaller font and distinct style
+          pdf.setFontSize(10);
+          const wrapped = pdf.splitTextToSize(line, printableWidth - 20);
+          const lineHeight = 15;
+          
+          wrapped.forEach(l => {
+            checkPageBreak(lineHeight);
+            // Draw light background for code line
+            pdf.setFillColor(245, 247, 250);
+            pdf.rect(margin, currentY - 10, printableWidth, lineHeight, 'F');
+            pdf.setTextColor(80, 80, 80);
+            pdf.text(l, margin + 10, currentY);
+            currentY += lineHeight;
+          });
+          pdf.setTextColor(0, 0, 0); // reset color
+          pdf.setFontSize(11);
+          continue;
+        }
+        
+        // Headers
+        if (line.startsWith('#')) {
+          const match = line.match(/^(#{1,6})\s+(.*)$/);
+          if (match) {
+            const level = match[1].length;
+            const text = match[2];
+            
+            let fontSize = 11;
+            let spacingBefore = 15;
+            let spacingAfter = 8;
+            
+            if (level === 1) { fontSize = 20; spacingBefore = 20; }
+            else if (level === 2) { fontSize = 16; spacingBefore = 18; }
+            else if (level === 3) { fontSize = 14; spacingBefore = 14; }
+            else { fontSize = 12; spacingBefore = 12; }
+            
+            currentY += spacingBefore;
+            pdf.setFontSize(fontSize);
+            
+            const wrapped = pdf.splitTextToSize(text, printableWidth);
+            const lineHeight = fontSize * 1.3;
+            
+            wrapped.forEach(l => {
+              checkPageBreak(lineHeight);
+              pdf.text(l, margin, currentY);
+              // Draw twice slightly offset to create bold effect since we use single regular font file
+              pdf.text(l, margin + 0.3, currentY);
+              currentY += lineHeight;
+            });
+            
+            currentY += spacingAfter;
+            pdf.setFontSize(11);
+            continue;
+          }
+        }
+        
+        // Blockquotes
+        if (line.startsWith('>')) {
+          const text = line.substring(1).trim();
+          pdf.setFontSize(10.5);
+          const wrapped = pdf.splitTextToSize(text, printableWidth - 20);
+          const lineHeight = 16;
+          
+          const startY = currentY - 10;
+          wrapped.forEach(l => {
+            checkPageBreak(lineHeight);
+            pdf.text(l, margin + 15, currentY);
+            currentY += lineHeight;
+          });
+          const endY = currentY - 10;
+          
+          // Draw blockquote border line
+          pdf.setStrokeColor(200, 200, 200);
+          pdf.setLineWidth(2);
+          pdf.line(margin + 5, startY, margin + 5, endY);
+          
+          pdf.setFontSize(11);
+          continue;
+        }
+        
+        // List items
+        const listMatch = line.match(/^(\s*)(-\s+|\*\s+|\+\s+|\d+\.\s+)(.*)$/);
+        if (listMatch) {
+          const indentLevel = listMatch[1].length;
+          const marker = listMatch[2];
+          const text = listMatch[3];
+          
+          const isNumbered = /^\d+/.test(marker.trim());
+          const displayMarker = isNumbered ? marker.trim() : '•';
+          
+          const indentWidth = 15 + indentLevel * 10;
+          pdf.setFontSize(11);
+          const wrapped = pdf.splitTextToSize(text, printableWidth - indentWidth);
+          const lineHeight = 16;
+          
+          wrapped.forEach((l, idx) => {
+            checkPageBreak(lineHeight);
+            if (idx === 0) {
+              pdf.text(displayMarker, margin + indentWidth - 10, currentY);
+            }
+            pdf.text(l, margin + indentWidth, currentY);
+            currentY += lineHeight;
+          });
+          continue;
+        }
+        
+        // Standard Paragraph
+        pdf.setFontSize(11);
+        const wrapped = pdf.splitTextToSize(line.trim(), printableWidth);
+        const lineHeight = 16;
+        
+        wrapped.forEach(l => {
+          checkPageBreak(lineHeight);
+          pdf.text(l, margin, currentY);
+          currentY += lineHeight;
+        });
+      }
+      
+      const ts = getTimestampString();
+      const fileName = `md2pdf_text_${ts}.pdf`;
+      
+      if (action === 'download') {
+        pdf.save(fileName);
+        showToast('✅ 文字版 PDF 已成功儲存至本地！', 'success');
+      } else if (action === 'share') {
+        const pdfBlob = pdf.output('blob');
+        const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+        
+        if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+          await navigator.share({
+            files: [pdfFile],
+            title: '分享文字版 PDF 文件',
+            text: '這是從 Markdown 編輯器產生的文字版 PDF 文件（可複製內文）。'
+          });
+          showToast('✅ 分享視窗已開啟！', 'success');
+        } else {
+          pdf.save(fileName);
+          showToast('⚠️ 本裝置不支援直接分享 PDF，已自動為您下載！', 'warning');
+        }
+      }
+    } catch (err) {
+      console.error('Text PDF generation failed:', err);
+      showToast('❌ 產生文字 PDF 失敗，請重試！', 'error');
+    }
+  };
+
   const getTimestampString = () => {
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -1109,26 +1341,83 @@ export default function App() {
           </select>
         )}
 
-        {/* Mobile PDF Action Buttons (only visible on small screens next to select dropdown) */}
-        <div className="flex sm:hidden items-center gap-0.5 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/20 p-0.5 border border-indigo-200/30 dark:border-indigo-900/30">
+        {/* Mobile PDF Dropdown Button */}
+        <div className="relative flex sm:hidden">
           <button
-            onClick={() => handleExportPDF('download')}
-            className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-white dark:hover:bg-slate-800 rounded transition-all"
-            title="存為 PDF"
+            onClick={() => setActivePdfDropdown(activePdfDropdown === 'mobile-pdf' ? null : 'mobile-pdf')}
+            className="flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20 hover:bg-white dark:hover:bg-slate-800 border border-indigo-200/30 dark:border-indigo-900/30 rounded-lg transition-all"
+            title="PDF 匯出與分享"
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+            </svg>
+            <span>PDF</span>
+            <svg className="w-2.5 h-2.5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
-          <button
-            onClick={() => handleExportPDF('share')}
-            className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-white dark:hover:bg-slate-800 rounded transition-all"
-            title="分享 PDF"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8.684 10.742l4.628-2.314m0 0a3 3 0 10-2.222-2.518m2.222 2.518a3 3 0 11-2.222 2.518m0 0L8.684 13.24" />
-            </svg>
-          </button>
+          
+          {activePdfDropdown === 'mobile-pdf' && (
+            <>
+              {/* Backdrop to close dropdown on click outside */}
+              <div className="fixed inset-0 z-30" onClick={() => setActivePdfDropdown(null)} />
+              <div className="absolute right-0 mt-7 w-52 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xl z-40 p-1 animate-fade-in">
+                <button
+                  onClick={() => {
+                    handleExportPDF('download');
+                    setActivePdfDropdown(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
+                >
+                  <span className="text-sm">🖼️</span>
+                  <div>
+                    <div className="font-bold text-[11px]">下載圖片 PDF</div>
+                    <div className="text-[9px] text-slate-400 font-normal">保留完整排版樣式</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    handleExportPDF('share');
+                    setActivePdfDropdown(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
+                >
+                  <span className="text-sm">📤</span>
+                  <div>
+                    <div className="font-bold text-[11px]">分享圖片 PDF</div>
+                    <div className="text-[9px] text-slate-400 font-normal">傳送圖片版 PDF</div>
+                  </div>
+                </button>
+                <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-1" />
+                <button
+                  onClick={() => {
+                    handleExportTextPDF('download');
+                    setActivePdfDropdown(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
+                >
+                  <span className="text-sm">📝</span>
+                  <div>
+                    <div className="font-bold text-[11px]">下載文字 PDF</div>
+                    <div className="text-[9px] text-slate-400 font-normal">可搜尋、複製內文</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    handleExportTextPDF('share');
+                    setActivePdfDropdown(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
+                >
+                  <span className="text-sm">📤</span>
+                  <div>
+                    <div className="font-bold text-[11px]">分享文字 PDF</div>
+                    <div className="text-[9px] text-slate-400 font-normal">傳送文字版 PDF</div>
+                  </div>
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
@@ -1267,29 +1556,84 @@ export default function App() {
           )}
         </div>
 
-        {/* PDF Export Buttons */}
+        {/* PDF Export Dropdown */}
         {isReading && (
-          <div className="relative hidden sm:flex items-center rounded-lg bg-indigo-50/50 dark:bg-indigo-950/20 p-0.5 border border-indigo-200/30 dark:border-indigo-900/30">
+          <div className="relative hidden sm:flex">
             <button
-              onClick={() => handleExportPDF('download')}
-              className="px-2 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:bg-white dark:hover:bg-slate-800 rounded transition-all flex items-center gap-1"
-              title="將此閱讀排版儲存為 PDF 檔案到本地"
+              onClick={() => setActivePdfDropdown(activePdfDropdown === `${uniqueKey}-pdf` ? null : `${uniqueKey}-pdf`)}
+              className="px-2 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20 hover:bg-white dark:hover:bg-slate-800 border border-indigo-200/30 dark:border-indigo-900/30 rounded-lg transition-all flex items-center gap-1"
+              title="匯出此閱讀排版為 PDF"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
               </svg>
-              <span>存為 PDF</span>
-            </button>
-            <button
-              onClick={() => handleExportPDF('share')}
-              className="px-2 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:bg-white dark:hover:bg-slate-800 rounded transition-all flex items-center gap-1"
-              title="將此閱讀排版轉為 PDF 並分享至 LINE 或其他 App"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8.684 10.742l4.628-2.314m0 0a3 3 0 10-2.222-2.518m2.222 2.518a3 3 0 11-2.222 2.518m0 0L8.684 13.24" />
+              <span>PDF 匯出</span>
+              <svg className="w-2.5 h-2.5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
               </svg>
-              <span>分享 PDF</span>
             </button>
+            
+            {activePdfDropdown === `${uniqueKey}-pdf` && (
+              <>
+                {/* Backdrop to close dropdown on click outside */}
+                <div className="fixed inset-0 z-10" onClick={() => setActivePdfDropdown(null)} />
+                <div className="absolute right-0 mt-7 w-52 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xl z-20 p-1 animate-fade-in">
+                  <button
+                    onClick={() => {
+                      handleExportPDF('download');
+                      setActivePdfDropdown(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
+                  >
+                    <span className="text-sm">🖼️</span>
+                    <div>
+                      <div className="font-bold text-[11px]">下載圖片 PDF</div>
+                      <div className="text-[9px] text-slate-400 font-normal">保留完整排版樣式</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleExportPDF('share');
+                      setActivePdfDropdown(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
+                  >
+                    <span className="text-sm">📤</span>
+                    <div>
+                      <div className="font-bold text-[11px]">分享圖片 PDF</div>
+                      <div className="text-[9px] text-slate-400 font-normal">傳送圖片版 PDF</div>
+                    </div>
+                  </button>
+                  <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-1" />
+                  <button
+                    onClick={() => {
+                      handleExportTextPDF('download');
+                      setActivePdfDropdown(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
+                  >
+                    <span className="text-sm">📝</span>
+                    <div>
+                      <div className="font-bold text-[11px]">下載文字 PDF</div>
+                      <div className="text-[9px] text-slate-400 font-normal">可搜尋、複製內文</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleExportTextPDF('share');
+                      setActivePdfDropdown(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
+                  >
+                    <span className="text-sm">📤</span>
+                    <div>
+                      <div className="font-bold text-[11px]">分享文字 PDF</div>
+                      <div className="text-[9px] text-slate-400 font-normal">傳送文字版 PDF</div>
+                    </div>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
