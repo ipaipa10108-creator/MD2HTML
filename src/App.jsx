@@ -1143,6 +1143,7 @@ export default function App() {
       --font-body: 'Inter', 'Noto Sans TC', system-ui, sans-serif;
       --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       --toc-hover: rgba(99, 102, 241, 0.04);
+      --font-size-base: 16px;
     }
     
     [data-theme="dark"] {
@@ -1175,7 +1176,7 @@ export default function App() {
       background-color: var(--bg-body);
       color: var(--text-main);
       font-family: var(--font-body);
-      font-size: 16px;
+      font-size: var(--font-size-base);
       line-height: 1.8;
       transition: background-color 0.3s, color 0.3s;
     }
@@ -1504,36 +1505,64 @@ export default function App() {
     [data-theme="dark"] .theme-icon-sun { display: block; }
     [data-theme="dark"] .theme-icon-moon { display: none; }
 
-    .sidebar-toggle-label {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0 0.85rem;
+    .font-ctrl-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
       background-color: var(--bg-panel);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      font-size: 0.8rem;
-      font-weight: 600;
       color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
       box-shadow: var(--shadow);
       transition: all 0.2s;
+      font-weight: 800;
+      font-family: var(--font-body);
       user-select: none;
-      height: 42px;
     }
-    
-    .sidebar-toggle-label:hover {
+    .font-ctrl-btn:hover {
       background-color: var(--bg-card);
       transform: translateY(-2px);
       box-shadow: var(--shadow-lg);
     }
-    
-    .sidebar-toggle-label input {
-      width: 0.95rem;
-      height: 0.95rem;
-      cursor: pointer;
-      accent-color: var(--accent);
+    .font-ctrl-btn.font-inc { font-size: 1rem; }
+    .font-ctrl-btn.font-dec { font-size: 0.75rem; }
+
+    /* Mobile inline controls (inside mobile-header) */
+    .mobile-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      flex-shrink: 0;
     }
+    .mobile-ctrl-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-weight: 800;
+      font-family: var(--font-body);
+      transition: background-color 0.2s;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mobile-ctrl-btn:active {
+      background-color: var(--bg-card);
+    }
+    .mobile-ctrl-btn.font-inc { font-size: 0.85rem; }
+    .mobile-ctrl-btn.font-dec { font-size: 0.68rem; }
+    .mobile-ctrl-btn .theme-icon-sun { display: none; }
+    .mobile-ctrl-btn .theme-icon-moon { display: block; }
+    [data-theme="dark"] .mobile-ctrl-btn .theme-icon-sun { display: block; }
+    [data-theme="dark"] .mobile-ctrl-btn .theme-icon-moon { display: none; }
     
     .mobile-header {
       display: none;
@@ -1578,11 +1607,11 @@ export default function App() {
       font-size: 0.75rem;
       color: var(--accent);
       font-weight: 600;
-      max-width: 140px;
+      flex: 1;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      margin-right: 7rem;
+      padding: 0 0.5rem;
     }
     
     .menu-toggle-btn {
@@ -1652,34 +1681,19 @@ export default function App() {
       body:not(.no-sidebar) .mobile-header {
         display: flex;
       }
-      
+
+      /* Hide desktop controls-panel on mobile; controls live in mobile-header instead */
       .controls-panel {
-        top: 9px;
-        right: 1rem;
-      }
-      
-      .control-btn {
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
-      }
-      
-      .sidebar-toggle-label {
-        height: 36px;
-        padding: 0 0.65rem;
-        border-radius: 8px;
-        font-size: 0.75rem;
-      }
-    }
-    
-    @media (max-width: 640px) {
-      .sidebar-toggle-label span {
         display: none;
       }
-      .sidebar-toggle-label {
-        padding: 0 0.5rem;
-        width: 36px;
-        justify-content: center;
+
+      /* Center sidebar-toggle-btn vertically so it clears the mobile header */
+      .sidebar-toggle-btn {
+        top: 50%;
+        transform: translateY(-50%);
+      }
+      body:not(.sidebar-expanded) .sidebar-toggle-btn {
+        transform: translateY(-50%) rotate(0deg);
       }
     }
   </style>
@@ -1703,6 +1717,18 @@ export default function App() {
       </div>
     </div>
     <div id="mobile-current-title" class="mobile-active-section"></div>
+    <div class="mobile-controls">
+      <button id="mobile-font-decrease" class="mobile-ctrl-btn font-dec" title="縮小字體">A-</button>
+      <button id="mobile-font-increase" class="mobile-ctrl-btn font-inc" title="放大字體">A+</button>
+      <button id="mobile-theme-toggle" class="mobile-ctrl-btn" title="切換主題">
+        <svg class="theme-icon-sun" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+        <svg class="theme-icon-moon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+      </button>
+    </div>
   </header>
 
   <div id="sidebar-overlay" class="sidebar-overlay"></div>
@@ -1727,6 +1753,8 @@ export default function App() {
   </div>
 
   <div class="controls-panel">
+    <button id="font-decrease" class="font-ctrl-btn font-dec" title="縮小字體">A-</button>
+    <button id="font-increase" class="font-ctrl-btn font-inc" title="放大字體">A+</button>
     <button id="theme-toggle" class="control-btn" title="切換主題 (深色/淺色)">
       <svg class="theme-icon-sun" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -1741,17 +1769,39 @@ export default function App() {
   <script>
     hljs.highlightAll();
 
-    const themeToggle = document.getElementById('theme-toggle');
+    // --- Theme ---
+    function applyTheme(theme) {
+      document.body.setAttribute('data-theme', theme);
+      localStorage.setItem('exported-theme', theme);
+    }
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)');
-    const storedTheme = localStorage.getItem('exported-theme') || (systemPrefersDark.matches ? 'dark' : 'light');
-    document.body.setAttribute('data-theme', storedTheme);
+    applyTheme(localStorage.getItem('exported-theme') || (systemPrefersDark.matches ? 'dark' : 'light'));
 
-    themeToggle.addEventListener('click', () => {
-      const currentTheme = document.body.getAttribute('data-theme');
-      const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
-      document.body.setAttribute('data-theme', nextTheme);
-      localStorage.setItem('exported-theme', nextTheme);
-    });
+    function onToggleTheme() {
+      applyTheme(document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    }
+    const themeToggle = document.getElementById('theme-toggle');
+    const mobileThemeToggle = document.getElementById('mobile-theme-toggle');
+    if (themeToggle) themeToggle.addEventListener('click', onToggleTheme);
+    if (mobileThemeToggle) mobileThemeToggle.addEventListener('click', onToggleTheme);
+
+    // --- Font Size ---
+    let currentFontSize = parseInt(localStorage.getItem('exported-font-size') || '16');
+    function applyFontSize(size) {
+      currentFontSize = Math.min(24, Math.max(12, size));
+      document.documentElement.style.setProperty('--font-size-base', currentFontSize + 'px');
+      localStorage.setItem('exported-font-size', String(currentFontSize));
+    }
+    applyFontSize(currentFontSize);
+
+    const fontIncrease = document.getElementById('font-increase');
+    const fontDecrease = document.getElementById('font-decrease');
+    const mobileFontIncrease = document.getElementById('mobile-font-increase');
+    const mobileFontDecrease = document.getElementById('mobile-font-decrease');
+    if (fontIncrease) fontIncrease.addEventListener('click', () => applyFontSize(currentFontSize + 1));
+    if (fontDecrease) fontDecrease.addEventListener('click', () => applyFontSize(currentFontSize - 1));
+    if (mobileFontIncrease) mobileFontIncrease.addEventListener('click', () => applyFontSize(currentFontSize + 1));
+    if (mobileFontDecrease) mobileFontDecrease.addEventListener('click', () => applyFontSize(currentFontSize - 1));
 
     const menuToggle = document.getElementById('menu-toggle');
     const sidebarOverlay = document.getElementById('sidebar-overlay');
