@@ -6,60 +6,66 @@
 
 ## 繁體中文說明書
 
-歡迎使用 **萬能 Markdown 編輯轉換器**！這是一個基於 Vite、React 與 Tailwind CSS 打造的極致美觀、高效單頁網頁應用程式 (SPA)。本專案支援 PWA 漸進式網頁應用安裝、強大的多終端即時同步，並針對行動端與電腦端社群軟體分享進行了深度最佳化。
+歡迎使用 **萬能 Markdown 編輯轉換器**！這是一個基於 Vite、React 與 Tailwind CSS 打造的極致美觀、高效單頁網頁應用程式 (SPA)，同時支援 PWA 漸進式安裝，可加入手機主畫面作為獨立 App 使用。
 
 ### 🌟 核心特色功能
 
 1. **三向即時互轉同步**
    - **Markdown 編輯區**、**HTML 原始碼編輯區** 與 **美化閱讀排版區** 三者無縫即時同步。
-   - 雙擊「美化閱讀排版」即可啟用 `contentEditable` 直覺式編輯，直接點擊文字即可修改。
-   - 針對 Android/iOS 行動端輸入法與 Backspace 退格鍵進行了防抖設計，僅在您離開編輯（Blur）或點擊「儲存」時觸獲同步，確保在手機上打字 100% 順暢不跳游標。
+   - 雙擊「美化閱讀排版」即可啟用 `contentEditable` 直覺式視覺編輯模式，修改內容亦會即時同步回 Markdown 及 HTML。
+   - 針對 Android/iOS 行動端輸入法進行了防抖設計，僅在您離開編輯（Blur）或點擊「儲存」時觸發同步，確保手機打字 100% 順暢不跳游標。
 
-2. **智慧圖片匯出與自由切片**
-   - 整合 `html2canvas`，將您的文件渲染成 crisp 高清 2x 圖片。
-   - 支援 **整頁輸出**、**按張數均等裁切** 或 **按固定像素高度裁切**。
-   - 支援選擇「極簡白」或「質感暗黑」背景風格。
-   - 各切片圖片皆具備獨立勾選框，您可以自由選擇想要處理的圖片。
-   - **一鍵打包下載**：將所選圖片自動壓縮為 ZIP 壓縮檔。
+2. **彈性版面配置**
+   - 支援**單欄模式**或**雙欄對照模式**，可在工具列下拉選單自訂左右兩欄的顯示內容（Markdown / HTML / 閱讀格式三選一）。
+   - 工具列在行動端滑動時自動隱藏、點擊時浮現，維持最大閱讀空間。
 
-3. **全新 PDF 匯出與分享（支援圖片與可選取複製文字）**
-   - **圖片版 PDF**：完美還原網頁美化排版樣式，支援單擊下載與一鍵分享。
-   - **文字版 PDF**：動態載入高級中文向量字型（**霞鶩文楷 Lite**，約 14MB），產生 **100% 可選取複製與搜尋內文** 的 PDF 文件。
-   - **整合式下拉選單**：將所有 PDF 匯出與分享選項收納至單個美觀的「PDF 匯出」下拉選單中，保持雙端介面乾淨俐落。
+3. **智慧圖片匯出與自由切片**
+   - 整合 `html2canvas` 與 `JSZip`，將文件渲染成 2x 高清圖片。
+   - 支援**整頁輸出**、**按張數均等裁切**或**按固定像素高度裁切**。
+   - 提供「極簡白」與「質感暗黑」兩種背景風格。
+   - 各切片圖片具備獨立勾選框，可自由選擇後**一鍵打包下載 ZIP**。
 
-4. **全新美化 HTML 匯出與分享 (具備雙欄文件大綱)**
-   - 支援下載或分享「美化網頁 HTML」檔案。
-   - **雙欄自適應佈局**：預設為雙欄排版，左邊為快速跳轉段落的文件大綱（TOC），右邊為文章主體，排版精緻無雜亂標題。
-   - **雙重收合大綱功能**：
-     - **左側大綱收合按鈕/分頁**：在大綱の右邊緣提供了一個極具質感的懸浮圓形按鈕（折疊/展開指示箭頭），點擊可流暢地收合或拉出左側大綱。
-     - **右上角顯示大綱核取方塊**：在產出的網頁右上角提供「顯示大綱」核取方塊，可同步連動控制大綱的收合，狀態自動保存於 `localStorage`，大綱展開時右側內文自動收縮適應螢幕。
-   - **Scrollspy 滾動偵測**：當讀者滾動文章時，左側大綱對應的段落會自動高亮點亮，讓讀者極易辨識目前閱讀位置。
-   - **匯出前檔名確認**：在點擊匯出 HTML 時，系統會彈出一個毛玻璃風格的對話框讓使用者預覽並有機會任意修改自訂檔名，確認後才執行下載或分享。
+4. **PDF 匯出與分享（支援圖片版與文字版）**
+   - **圖片版 PDF**：完美還原美化排版樣式，支援一鍵下載與系統分享。
+   - **文字版 PDF**：動態載入高級中文向量字型（**霞鶩文楷 Lite**，約 14MB），產生 100% 可選取複製與全文搜尋的 PDF 文件。
+   - 所有匯出選項整合於單一下拉選單，介面乾淨俐落。
+
+5. **美化 HTML 匯出（雙欄大綱排版）**
+   - 支援下載或分享一個精緻排版的獨立 HTML 文件，開啟後免安裝、免網路即可閱讀。
+   - **自適應雙欄佈局**：
+     - 桌機 / 平板（橫向）：預設雙欄並排——左側為快速跳轉的**文件大綱 (TOC)**，右側為**文章主體**。
+     - 手機：預設單欄，點擊頂部漢堡選單 `☰` 可展開大綱，點擊段落後自動收合。
+   - **大綱折疊按鈕**：桌機端大綱右邊緣有一個懸浮圓形箭頭按鈕，點擊可流暢地展開/收合左欄大綱，使內文版面自動適應。
+   - **Scrollspy 滾動偵測**：讀者滾動時，左側大綱對應的段落標題自動高亮，讓使用者清楚知道目前閱讀位置。
+   - **A+ / A- 字體大小調整**：
+     - 桌機：右上角固定按鈕。
+     - 手機/平板：標頭列右側，可即時放大 (最大 24px) / 縮小 (最小 12px) 全頁字體，偏好自動儲存。
+   - **深色 / 淺色主題切換**：右上角（桌機）或標頭內（手機/平板）切換，偏好自動儲存。
    - **客製化檔名規律**：
-     - 當 Markdown 內容中含有 `#` 標題（例如 `# 標題`）時，預設產出檔名為：`md2html_標題_YYYYMMDD.html`（自動去除了 `#` 字首且時間戳記只保留年月日）。
-     - 當無 `#` 標題時，檔名則預設採用毫秒級別完整時間戳記：`md2html_YYYYMMDDssss.html`。
+     - 含 `#` 標題：`md2html_標題_YYYYMMDD.html`（自動去除 `#` 字首）。
+     - 無 `#` 標題：`md2html_YYYYMMDDssss.html`（完整毫秒時間戳記）。
+   - **智慧下載策略**：桌機（非觸控）直接下載，由 OS 另存對話框讓使用者改名；手機/平板先彈出「確認檔名」對話框。
 
-5. **深度社群分享優化 (針對 LINE / Desktop / Mobile)**
-   - **一鍵社群分享**：在支援的行動裝置上，可直接呼叫系統分享傳送圖片/PDF 等檔案至 LINE、Messenger 等。
-   - **剪貼簿圖片複製 (最佳 PC / LINE 方案)**：因大部分電腦與部分手機沙盒限制無法直接以網頁傳送二進位圖片檔，本程式提供「複製圖片」按鈕。點擊後圖片將自動存入剪貼簿，您只需直接在 LINE 對話框按下 **Ctrl + V (或長按貼上)** 即可 100% 傳送圖片，極速又穩定。
+6. **深度社群分享優化**
+   - 在支援的行動裝置上，直接呼叫系統 Web Share API 將圖片、PDF 或 HTML 傳送至 LINE、Messenger 等 App。
+   - **複製圖片至剪貼簿（PC / LINE 最佳方案）**：直接將 PNG Blob 存入剪貼簿，在 LINE 對話框按 `Ctrl + V` 即可無縫傳送。
 
-5. **PWA 捷徑與書籤支援**
-   - 具備專屬的現代漸層色向量圖標 (`favicon.svg`) 與 Web Manifest 機制。
-   - 支援將此工具「新增至手機主畫面」，作為獨立 App 啟動，離線或書籤引導更為專業美觀。
+7. **PWA 漸進式網頁應用**
+   - 具備現代漸層向量圖標與 Web App Manifest，支援加入手機主畫面或瀏覽器桌面捷徑，離線時仍可使用。
 
-6. **歷史記錄管理 (Undo/Redo)**
-   - 內建 400ms 輸入防抖機制，自動記錄您的編輯歷史，支援無限次「上一步」與「下一步」。
+8. **歷史記錄管理（Undo / Redo）**
+   - 400ms 輸入防抖機制，自動記錄編輯歷史，支援無限次上一步與下一步。
 
-7. **客製化毛玻璃確認 Modal**
-   - 捨棄會被沙盒阻擋的 `window.confirm`，改用全客製的毛玻璃視覺警告視窗，體驗更高級。
+9. **毛玻璃風格確認對話框**
+   - 全客製毛玻璃視覺 Modal，取代瀏覽器原生 `window.confirm`，用於清除內容、確認檔名等關鍵操作。
 
 ---
 
 ### 📦 安裝與本地開發
 
-請確保您已安裝 [Node.js](https://nodejs.org/)。
+請確保已安裝 [Node.js](https://nodejs.org/)。
 
-1. **複製專案並安裝依賴**
+1. **安裝依賴**
    ```bash
    npm install
    ```
@@ -67,7 +73,7 @@
    ```bash
    npm run dev
    ```
-3. **編譯打包專案**
+3. **編譯打包**
    ```bash
    npm run build
    ```
@@ -78,11 +84,11 @@
 
 本專案已完整配置 `gh-pages` 與相對路徑。
 
-1. 將您的本地 Git 倉庫關聯至 GitHub：
+1. 關聯 GitHub 遠端倉庫：
    ```bash
    git remote add origin https://github.com/您的帳號/您的倉庫名.git
    ```
-2. 執行一鍵部署指令，它會自動打包並推送到遠端 `gh-pages` 分支：
+2. 一鍵打包並推送：
    ```bash
    npm run deploy
    ```
@@ -93,68 +99,74 @@
 
 ## English User Manual
 
-Welcome to the **Universal Markdown Editor Converter**! This is a visually stunning, highly efficient Single-Page Application (SPA) built with Vite, React, and Tailwind CSS. It supports Progressive Web App (PWA) installation, powerful multi-pane real-time synchronization, and is heavily optimized for desktop and mobile social sharing (e.g., LINE, Slack, Discord).
+Welcome to the **Universal Markdown Editor Converter**! A visually stunning, highly efficient Single-Page Application (SPA) built with Vite, React, and Tailwind CSS. Supports Progressive Web App (PWA) installation, powerful multi-pane real-time synchronization, and deep optimization for mobile/desktop sharing.
 
 ### 🌟 Key Features
 
 1. **Three-Way Live Synchronization**
-   - Seamless real-time updates between the **Markdown Editor**, **HTML Source Editor**, and **Reading Layout View**.
-   - Double-click the Reading View to activate direct `contentEditable` editing.
-   - Built with debounce mechanics for Android/iOS virtual keyboards, triggering state synchronization only upon `onBlur` (when clicking away or tapping "Save"), completely eliminating caret jumps or keyboard dismissal bugs on mobile.
+   - Seamless real-time updates across the **Markdown Editor**, **HTML Source Editor**, and **Reading Layout View**.
+   - Double-click the Reading View to activate direct `contentEditable` visual editing; changes sync back to both Markdown and HTML instantly.
+   - Debounced input for Android/iOS virtual keyboards — syncs only on `onBlur` or "Save", eliminating caret jumps on mobile.
 
-2. **Smart Image Export & Custom Slicing**
-   - Powered by `html2canvas` to render high-definition 2x resolution captures of your document.
-   - Slicing modes: **Full Document**, **Equal Slicing (by page count)**, or **Fixed Height Slicing (by pixels)**.
-   - Choose between "Minimalist Light" (white) or "Chic Dark" (dark navy) background styles.
-   - Checkboxes are provided on each slice thumbnail, letting you choose exactly which images to process.
-   - **Download selected slices as a ZIP**: Instantly bundle selected slices into a zip file.
+2. **Flexible Layout Modes**
+   - Switch between **Single Pane** and **Dual Pane** modes; customize each column content (Markdown / HTML / Reading) via dropdown.
+   - Toolbar auto-hides on mobile scroll and reappears on tap to maximize reading space.
 
-3. **New PDF Export & Sharing (Image & Selectable Text Versions)**
-   - **Image-based PDF**: Capture layout structure as high-definition PDF images (preserving exact CSS/HTML styling), ready for download or sharing.
-   - **Text-based PDF**: Dynamically downloads and embeds the **LXGW WenKai Lite** Chinese font (approx. 14MB) to render document text directly as vector PDF objects, ensuring **100% copyable, selectable, and searchable** text for the recipient.
-   - **Consolidated PDF Dropdown**: Condenses all PDF options into a premium, responsive dropdown menu suitable for both mobile and desktop utility bars.
+3. **Smart Image Export & Custom Slicing**
+   - Powered by `html2canvas` + `JSZip` for 2× hi-res rendering.
+   - Modes: **Full Document**, **Equal Slices (by count)**, or **Fixed-Height Slices (by pixels)**.
+   - Two background styles: "Minimalist Light" and "Chic Dark".
+   - Checkbox per slice; **one-click ZIP download** of selected slices.
 
-4. **HTML Page Export with Collapsible Sidebar Outline**
-   - Supports downloading and sharing as a fully functional, styled HTML page.
-   - **Responsive Split Layout**: Features a double-column view by default, with a clickable Table of Contents (TOC) sidebar on the left and readable content on the right.
-   - **Dual Sidebar Toggle Mechanisms**:
-     - **Left Toggle Tab/Button**: A sleek, circular hover-button floats on the right border of the sidebar, allowing readers to slide the TOC in and out.
-     - **Top-Right "Show Outline" Checkbox**: A checkbox in the top-right controls-panel toggles the sidebar's collapse state, syncing with localStorage and shrinking the main text column layout.
-   - **Scrollspy Indicator**: Highlight current active header in the sidebar dynamically as you scroll through the page.
-   - **Filename Confirmation Dialog**: Shows a frosted-glass confirmation modal before download/share, allowing the user to rename the HTML file as needed.
-   - **Customized Filename Rules**:
-     - If a `#` heading (e.g. `# Title`) is found, the default filename is `md2html_Title_YYYYMMDD.html` (the `#` prefix is stripped and only the `YYYYMMDD` date is used for timestamp).
-     - If no `#` heading is found, it falls back to full millisecond-precision timestamp: `md2html_YYYYMMDDssss.html`.
+4. **PDF Export & Sharing (Image & Selectable-Text Versions)**
+   - **Image PDF**: Captures exact CSS/HTML styling as high-definition PDF images.
+   - **Text PDF**: Dynamically embeds the **LXGW WenKai Lite** Chinese font (~14MB) for 100% copyable, selectable, and searchable text.
+   - All options consolidated in a single elegant dropdown menu.
 
-5. **Deep Social Share Optimization (PC & LINE Compatibility)**
-   - **Share Files**: Directly invokes the system Web Share dialog on supported mobile OS to send multiple sliced files/PDFs to apps like LINE or Messenger.
-   - **Copy Image to Clipboard**: Web Share API file-transfers often fail on desktop clients due to OS-level sandboxing. We provide a **"Copy Image"** button that writes the raw PNG blob directly to the clipboard. Simply press **Ctrl + V (or long press paste)** inside LINE, Discord, or WeChat to send the image instantly.
+5. **Styled HTML Export (Dual-Column Outline Layout)**
+   - Downloads or shares a fully self-contained, beautifully styled HTML document — no internet required to read.
+   - **Responsive Split Layout**:
+     - Desktop / Landscape Tablet: Default dual-column — left TOC sidebar + right article body.
+     - Mobile: Single column; tap `☰` in the header to expand TOC; auto-collapses after navigation.
+   - **Sidebar Toggle Button**: A floating circular arrow button on the sidebar's right edge collapses/expands the TOC panel on desktop.
+   - **Scrollspy**: Active heading is automatically highlighted in the sidebar as you scroll.
+   - **A+ / A- Font Size Controls**:
+     - Desktop: Fixed top-right buttons.
+     - Mobile / Tablet: Inline buttons in the header bar. Range: 12px–24px; persisted to `localStorage`.
+   - **Dark / Light Theme Toggle**: Available in the top-right panel (desktop) or header bar (mobile/tablet); preference persisted.
+   - **Custom Filename Rules**:
+     - With `#` heading: `md2html_Title_YYYYMMDD.html` (strips the `#` prefix).
+     - Without heading: `md2html_YYYYMMDDssss.html` (full millisecond timestamp).
+   - **Smart Download Strategy**: Desktop (non-touch) downloads directly via OS Save dialog; mobile/tablet shows a filename confirmation modal first.
 
-5. **PWA & Desktop Shortcut Ready**
-   - Equipped with a custom gradient vector icon (`favicon.svg`) and a Web App Manifest.
-   - Easily install the editor to your mobile homescreen or desktop browser shortcuts for a native, app-like standalone experience.
+6. **Deep Social Share Optimization**
+   - Invokes the Web Share API on supported devices to send images, PDFs, or HTML to LINE, Messenger, etc.
+   - **Copy Image to Clipboard (PC / LINE)**: Writes PNG blob directly to clipboard — paste with `Ctrl + V` in LINE.
 
-6. **History Management (Undo/Redo)**
-   - Features a 400ms debounced state stack, allowing you to seamlessly step backward and forward through your edits.
+7. **PWA — Progressive Web App**
+   - Custom gradient vector icon + Web App Manifest; installable to mobile homescreen or desktop shortcut; offline-capable.
 
-7. **Custom Frosted Glass Confirmation Dialogs**
-   - Replaced standard browser blockages like `window.confirm` with smooth, glassmorphic warnings that elevate the premium feel.
+8. **History Management (Undo / Redo)**
+   - 400ms debounced state stack for unlimited undo and redo.
+
+9. **Custom Frosted-Glass Dialogs**
+   - Premium glassmorphic modals replace native `window.confirm` for clear, delete, and filename confirmation actions.
 
 ---
 
 ### 📦 Setup & Local Development
 
-Make sure you have [Node.js](https://nodejs.org/) installed.
+Make sure [Node.js](https://nodejs.org/) is installed.
 
-1. **Install Dependencies**
+1. **Install dependencies**
    ```bash
    npm install
    ```
-2. **Start Dev Server**
+2. **Start dev server**
    ```bash
    npm run dev
    ```
-3. **Build Production Assets**
+3. **Build for production**
    ```bash
    npm run build
    ```
@@ -163,13 +175,11 @@ Make sure you have [Node.js](https://nodejs.org/) installed.
 
 ### 🚀 Deploying to GitHub Pages
 
-The project is fully pre-configured with relative paths and deployment scripts.
-
-1. Connect your local directory to your GitHub remote repository:
+1. Connect to your GitHub remote:
    ```bash
-   git remote add origin https://github.com/<your-username>/<your-repo-name>.git
+   git remote add origin https://github.com/<your-username>/<your-repo>.git
    ```
-2. Run the deployment command. It compiles your project and publishes the distribution files directly to the remote `gh-pages` branch:
+2. One-command deploy (builds + publishes to `gh-pages` branch):
    ```bash
    npm run deploy
    ```
