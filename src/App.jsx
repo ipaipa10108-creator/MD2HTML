@@ -1072,7 +1072,6 @@ export default function App() {
         });
       }
 
-      const ts = getTimestampString();
       const lines = markdown.split(/\r?\n/);
       let titleHeader = '';
       for (let i = 0; i < lines.length; i++) {
@@ -1088,9 +1087,16 @@ export default function App() {
 
       let fileName = '';
       if (titleHeader) {
-        const sanitizedTitle = titleHeader.replace(/[\\/:*?"<>|]/g, '_');
-        fileName = `md2html_#${sanitizedTitle}_${ts}.html`;
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}${mm}${dd}`;
+
+        const sanitizedTitle = titleHeader.replace(/[\\/:*?"<>|#]/g, '_');
+        fileName = `md2html_${sanitizedTitle}_${dateStr}.html`;
       } else {
+        const ts = getTimestampString();
         fileName = `md2html_${ts}.html`;
       }
 
@@ -1472,6 +1478,7 @@ export default function App() {
       display: flex;
       gap: 0.5rem;
       z-index: 50;
+      align-items: center;
     }
     
     .control-btn {
@@ -1499,6 +1506,37 @@ export default function App() {
     .theme-icon-moon { display: block; }
     [data-theme="dark"] .theme-icon-sun { display: block; }
     [data-theme="dark"] .theme-icon-moon { display: none; }
+
+    .sidebar-toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0 0.85rem;
+      background-color: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-main);
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      transition: all 0.2s;
+      user-select: none;
+      height: 42px;
+    }
+    
+    .sidebar-toggle-label:hover {
+      background-color: var(--bg-card);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+    
+    .sidebar-toggle-label input {
+      width: 0.95rem;
+      height: 0.95rem;
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
     
     .mobile-header {
       display: none;
@@ -1591,7 +1629,7 @@ export default function App() {
     body.no-sidebar .mobile-header {
       display: none;
     }
-    body.no-sidebar #sidebar-toggle {
+    body.no-sidebar #sidebar-checkbox-label {
       display: none;
     }
     
@@ -1629,6 +1667,24 @@ export default function App() {
         width: 36px;
         height: 36px;
         border-radius: 8px;
+      }
+      
+      .sidebar-toggle-label {
+        height: 36px;
+        padding: 0 0.65rem;
+        border-radius: 8px;
+        font-size: 0.75rem;
+      }
+    }
+    
+    @media (max-width: 640px) {
+      .sidebar-toggle-label span {
+        display: none;
+      }
+      .sidebar-toggle-label {
+        padding: 0 0.5rem;
+        width: 36px;
+        justify-content: center;
       }
     }
   </style>
@@ -1682,11 +1738,10 @@ export default function App() {
   </div>
 
   <div class="controls-panel">
-    <button id="sidebar-toggle" class="control-btn" title="切換大綱 (展開/折疊)">
-      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M4 5h16M4 12h16M4 19h16M10 5v14" />
-      </svg>
-    </button>
+    <label id="sidebar-checkbox-label" class="sidebar-toggle-label" title="切換大綱顯示">
+      <input type="checkbox" id="sidebar-checkbox" checked>
+      <span>顯示大綱</span>
+    </label>
     <button id="theme-toggle" class="control-btn" title="切換主題 (深色/淺色)">
       <svg class="theme-icon-sun" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -1713,24 +1768,44 @@ export default function App() {
       localStorage.setItem('exported-theme', nextTheme);
     });
 
-    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const sidebarCheckbox = document.getElementById('sidebar-checkbox');
     const menuToggle = document.getElementById('menu-toggle');
     const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+    function updateSidebarState(expanded) {
+      if (expanded) {
+        document.body.classList.add('sidebar-expanded');
+        if (sidebarCheckbox) sidebarCheckbox.checked = true;
+        localStorage.setItem('exported-sidebar-state', 'expanded');
+      } else {
+        document.body.classList.remove('sidebar-expanded');
+        if (sidebarCheckbox) sidebarCheckbox.checked = false;
+        localStorage.setItem('exported-sidebar-state', 'collapsed');
+      }
+    }
 
     // Restore sidebar state from localStorage or use default
     const storedSidebar = localStorage.getItem('exported-sidebar-state');
     if (storedSidebar === 'expanded') {
-      document.body.classList.add('sidebar-expanded');
+      updateSidebarState(true);
     } else if (storedSidebar === 'collapsed') {
-      document.body.classList.remove('sidebar-expanded');
+      updateSidebarState(false);
+    } else {
+      const hasClass = document.body.classList.contains('sidebar-expanded');
+      updateSidebarState(hasClass);
+    }
+
+    if (sidebarCheckbox) {
+      sidebarCheckbox.addEventListener('change', (e) => {
+        updateSidebarState(e.target.checked);
+      });
     }
 
     function toggleSidebar() {
-      const isExpanded = document.body.classList.toggle('sidebar-expanded');
-      localStorage.setItem('exported-sidebar-state', isExpanded ? 'expanded' : 'collapsed');
+      const isCurrentlyExpanded = document.body.classList.contains('sidebar-expanded');
+      updateSidebarState(!isCurrentlyExpanded);
     }
 
-    if (sidebarToggle) sidebarToggle.addEventListener('click', toggleSidebar);
     if (menuToggle) menuToggle.addEventListener('click', toggleSidebar);
     if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
 
@@ -1738,8 +1813,7 @@ export default function App() {
     tocLinks.forEach(link => {
       link.addEventListener('click', () => {
         if (window.innerWidth <= 1024) {
-          document.body.classList.remove('sidebar-expanded');
-          localStorage.setItem('exported-sidebar-state', 'collapsed');
+          updateSidebarState(false);
         }
       });
     });

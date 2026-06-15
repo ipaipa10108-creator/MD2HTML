@@ -27,7 +27,16 @@
    - **文字版 PDF**：動態載入高級中文向量字型（**霞鶩文楷 Lite**，約 14MB），產生 **100% 可選取複製與搜尋內文** 的 PDF 文件。
    - **整合式下拉選單**：將所有 PDF 匯出與分享選項收納至單個美觀的「PDF 匯出」下拉選單中，保持雙端介面乾淨俐落。
 
-4. **深度社群分享優化 (針對 LINE / Desktop / Mobile)**
+4. **全新美化 HTML 匯出與分享 (具備雙欄文件大綱)**
+   - 支援下載或分享「美化網頁 HTML」檔案。
+   - **雙欄自適應佈局**：預設為雙欄排版，左邊為快速跳轉段落的文件大綱（TOC），右邊為文章主體。
+   - **大綱快速收合**：在產出的網頁中，右上角提供「顯示大綱」的核取方塊（行動端為自動空間縮減），讓讀者可隨時切換大綱的收合或展示，且會將展開狀態記住於 `localStorage` 中。展開大綱時內容會自動收縮自適應螢幕大小。
+   - **Scrollspy 滾動偵測**：當讀者滾動文章時，左側大綱對應的段落會自動高亮點亮，讓讀者極易辨識目前閱讀位置。
+   - **客製化檔名規律**：
+     - 當 Markdown 內容中含有 `#` 標題（例如 `# 標題`）時，產出檔名為：`md2html_標題_YYYYMMDD.html`（自動去除了 `#` 字首且時間戳記只保留年月日）。
+     - 當無 `#` 標題時，檔名則採用毫秒級別完整時間戳記：`md2html_YYYYMMDDssss.html`。
+
+5. **深度社群分享優化 (針對 LINE / Desktop / Mobile)**
    - **一鍵社群分享**：在支援的行動裝置上，可直接呼叫系統分享傳送圖片/PDF 等檔案至 LINE、Messenger 等。
    - **剪貼簿圖片複製 (最佳 PC / LINE 方案)**：因大部分電腦與部分手機沙盒限制無法直接以網頁傳送二進位圖片檔，本程式提供「複製圖片」按鈕。點擊後圖片將自動存入剪貼簿，您只需直接在 LINE 對話框按下 **Ctrl + V (或長按貼上)** 即可 100% 傳送圖片，極速又穩定。
 
@@ -102,7 +111,16 @@ Welcome to the **Universal Markdown Editor Converter**! This is a visually stunn
    - **Text-based PDF**: Dynamically downloads and embeds the **LXGW WenKai Lite** Chinese font (approx. 14MB) to render document text directly as vector PDF objects, ensuring **100% copyable, selectable, and searchable** text for the recipient.
    - **Consolidated PDF Dropdown**: Condenses all PDF options into a premium, responsive dropdown menu suitable for both mobile and desktop utility bars.
 
-4. **Deep Social Share Optimization (PC & LINE Compatibility)**
+4. **HTML Page Export with Collapsible Sidebar Outline**
+   - Supports downloading and sharing as a fully functional, styled HTML page.
+   - **Responsive Split Layout**: Features a double-column view by default, with a clickable Table of Contents (TOC) sidebar on the left and readable content on the right.
+   - **Interactive Sidebar Control Checkbox**: Includes a "Show Outline" checkbox directly on the exported HTML page to collapse/expand the sidebar. Toggling the sidebar automatically shrinks/resizes the content area to fit the viewport. The preference is stored in `localStorage`.
+   - **Scrollspy Indicator**: Highlight current active header in the sidebar dynamically as you scroll through the page.
+   - **Customized Filename Rules**:
+     - If a `#` heading (e.g. `# Title`) is found, the file is named `md2html_Title_YYYYMMDD.html` (the `#` prefix is stripped and only the `YYYYMMDD` date is used for timestamp).
+     - If no `#` heading is found, it falls back to full millisecond-precision timestamp: `md2html_YYYYMMDDssss.html`.
+
+5. **Deep Social Share Optimization (PC & LINE Compatibility)**
    - **Share Files**: Directly invokes the system Web Share dialog on supported mobile OS to send multiple sliced files/PDFs to apps like LINE or Messenger.
    - **Copy Image to Clipboard**: Web Share API file-transfers often fail on desktop clients due to OS-level sandboxing. We provide a **"Copy Image"** button that writes the raw PNG blob directly to the clipboard. Simply press **Ctrl + V (or long press paste)** inside LINE, Discord, or WeChat to send the image instantly.
 
