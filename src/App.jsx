@@ -235,7 +235,7 @@ export default function App() {
   const [leftPane, setLeftPane] = useState('markdown'); // 'markdown' | 'html' | 'reading'
   const [rightPane, setRightPane] = useState('reading'); // 'markdown' | 'html' | 'reading'
   const [autoJump, setAutoJump] = useState(true); // Auto jump on paste
-  const [defaultExpandOutline, setDefaultExpandOutline] = useState(true); // Default expand outline in exported HTML
+
   const [showToolbars, setShowToolbars] = useState(true); // Auto hide/show toolbars on mobile scroll/tap
 
   // --- Double Click Editable State ---
@@ -1107,15 +1107,8 @@ export default function App() {
 
       const title = titleHeader || (exportedHeadings.length > 0 ? exportedHeadings[0].text : 'Markdown 匯出文件');
       
-      let bodyClasses = [];
-      if (exportedHeadings.length === 0) {
-        bodyClasses.push('no-sidebar');
-      } else {
-        if (defaultExpandOutline) {
-          bodyClasses.push('sidebar-expanded');
-        }
-      }
-      const bodyClass = bodyClasses.join(' ');
+      // Always start with sidebar-expanded for desktop; JS will collapse on mobile at runtime
+      const bodyClass = exportedHeadings.length === 0 ? 'no-sidebar' : 'sidebar-expanded';
 
       const fullHtml = `<!DOCTYPE html>
 <html lang="zh-Hant">
@@ -1633,9 +1626,7 @@ export default function App() {
     body.no-sidebar .mobile-header {
       display: none;
     }
-    body.no-sidebar #sidebar-checkbox-label {
-      display: none;
-    }
+
     
     @media (max-width: 1024px) {
       body:not(.no-sidebar) .sidebar {
@@ -1736,10 +1727,6 @@ export default function App() {
   </div>
 
   <div class="controls-panel">
-    <label id="sidebar-checkbox-label" class="sidebar-toggle-label" title="切換大綱顯示">
-      <input type="checkbox" id="sidebar-checkbox" checked>
-      <span>顯示大綱</span>
-    </label>
     <button id="theme-toggle" class="control-btn" title="切換主題 (深色/淺色)">
       <svg class="theme-icon-sun" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -1766,37 +1753,33 @@ export default function App() {
       localStorage.setItem('exported-theme', nextTheme);
     });
 
-    const sidebarCheckbox = document.getElementById('sidebar-checkbox');
     const menuToggle = document.getElementById('menu-toggle');
     const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+    function isMobile() {
+      return window.innerWidth <= 1024;
+    }
 
     function updateSidebarState(expanded) {
       if (expanded) {
         document.body.classList.add('sidebar-expanded');
-        if (sidebarCheckbox) sidebarCheckbox.checked = true;
         localStorage.setItem('exported-sidebar-state', 'expanded');
       } else {
         document.body.classList.remove('sidebar-expanded');
-        if (sidebarCheckbox) sidebarCheckbox.checked = false;
         localStorage.setItem('exported-sidebar-state', 'collapsed');
       }
     }
 
-    // Restore sidebar state from localStorage or use default
+    // On first load: collapse on mobile, keep expanded on desktop
+    // Check localStorage for user preference, fall back to screen-based default
     const storedSidebar = localStorage.getItem('exported-sidebar-state');
     if (storedSidebar === 'expanded') {
       updateSidebarState(true);
     } else if (storedSidebar === 'collapsed') {
       updateSidebarState(false);
     } else {
-      const hasClass = document.body.classList.contains('sidebar-expanded');
-      updateSidebarState(hasClass);
-    }
-
-    if (sidebarCheckbox) {
-      sidebarCheckbox.addEventListener('change', (e) => {
-        updateSidebarState(e.target.checked);
-      });
+      // No stored preference: desktop=expanded, mobile=collapsed
+      updateSidebarState(!isMobile());
     }
 
     function toggleSidebar() {
@@ -1813,7 +1796,8 @@ export default function App() {
     const tocLinks = document.querySelectorAll('.toc-link');
     tocLinks.forEach(link => {
       link.addEventListener('click', () => {
-        if (window.innerWidth <= 1024) {
+        // Auto-collapse sidebar after navigation on mobile
+        if (isMobile()) {
           updateSidebarState(false);
         }
       });
@@ -1877,7 +1861,22 @@ export default function App() {
 </html>`;
       
       const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
-      
+
+      // On desktop (non-touch), skip the filename modal — the OS save dialog lets users rename
+      // On mobile/touch devices, show the modal so users can confirm/edit the filename first
+      const isTouchDevice = navigator.maxTouchPoints > 0;
+      if (!isTouchDevice && action === 'download') {
+        // Desktop: direct download with pre-computed filename
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        link.click();
+        URL.revokeObjectURL(url);
+        showToast('✅ HTML 已成功儲存至本地！', 'success');
+        return;
+      }
+
       setExportHTMLBlob(blob);
       setExportHTMLTitle(title);
       setTempExportFilename(fileName);
@@ -2291,17 +2290,7 @@ export default function App() {
           </select>
         )}
 
-        {/* 預設展開大綱 Checkbox */}
-        <label className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400 cursor-pointer select-none bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 px-2 py-1.5 rounded-lg">
-          <input
-            type="checkbox"
-            checked={defaultExpandOutline}
-            onChange={(e) => setDefaultExpandOutline(e.target.checked)}
-            className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500/30 accent-indigo-500 cursor-pointer"
-          />
-          <span className="hidden xs:inline">預設展開大綱</span>
-          <span className="inline xs:hidden">展開大綱</span>
-        </label>
+
 
         {/* Mobile PDF Dropdown Button */}
         <div className="relative flex sm:hidden pdf-dropdown-container">
