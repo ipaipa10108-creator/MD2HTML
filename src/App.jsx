@@ -235,6 +235,7 @@ export default function App() {
   const [leftPane, setLeftPane] = useState('markdown'); // 'markdown' | 'html' | 'reading'
   const [rightPane, setRightPane] = useState('reading'); // 'markdown' | 'html' | 'reading'
   const [autoJump, setAutoJump] = useState(true); // Auto jump on paste
+  const [defaultExpandOutline, setDefaultExpandOutline] = useState(true); // Default expand outline in exported HTML
   const [showToolbars, setShowToolbars] = useState(true); // Auto hide/show toolbars on mobile scroll/tap
 
   // --- Double Click Editable State ---
@@ -1071,8 +1072,39 @@ export default function App() {
         });
       }
 
-      const title = exportedHeadings.length > 0 ? exportedHeadings[0].text : 'Markdown 匯出文件';
-      const bodyClass = exportedHeadings.length === 0 ? 'no-sidebar' : '';
+      const ts = getTimestampString();
+      const lines = markdown.split(/\r?\n/);
+      let titleHeader = '';
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('#')) {
+          const match = line.match(/^#+\s+(.+)$/);
+          if (match) {
+            titleHeader = match[1].trim();
+            break;
+          }
+        }
+      }
+
+      let fileName = '';
+      if (titleHeader) {
+        const sanitizedTitle = titleHeader.replace(/[\\/:*?"<>|]/g, '_');
+        fileName = `md2html_#${sanitizedTitle}_${ts}.html`;
+      } else {
+        fileName = `md2html_${ts}.html`;
+      }
+
+      const title = titleHeader || (exportedHeadings.length > 0 ? exportedHeadings[0].text : 'Markdown 匯出文件');
+      
+      let bodyClasses = [];
+      if (exportedHeadings.length === 0) {
+        bodyClasses.push('no-sidebar');
+      } else {
+        if (defaultExpandOutline) {
+          bodyClasses.push('sidebar-expanded');
+        }
+      }
+      const bodyClass = bodyClasses.join(' ');
 
       const fullHtml = `<!DOCTYPE html>
 <html lang="zh-Hant">
@@ -1164,6 +1196,11 @@ export default function App() {
       flex-direction: column;
       z-index: 10;
       transition: transform 0.3s, background-color 0.3s, border-color 0.3s;
+      transform: translateX(-300px);
+    }
+    
+    body.sidebar-expanded .sidebar {
+      transform: translateX(0);
     }
     
     .sidebar-header {
@@ -1274,10 +1311,14 @@ export default function App() {
     
     .main-content {
       flex: 1;
-      margin-left: 300px;
+      margin-left: 0;
       padding: 3rem 4rem 6rem;
       min-width: 0;
-      transition: margin 0.3s;
+      transition: margin-left 0.3s;
+    }
+    
+    body.sidebar-expanded .main-content {
+      margin-left: 300px;
     }
     
     .markdown-body {
@@ -1506,6 +1547,7 @@ export default function App() {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      margin-right: 7rem;
     }
     
     .menu-toggle-btn {
@@ -1549,6 +1591,9 @@ export default function App() {
     body.no-sidebar .mobile-header {
       display: none;
     }
+    body.no-sidebar #sidebar-toggle {
+      display: none;
+    }
     
     @media (max-width: 1024px) {
       body:not(.no-sidebar) .sidebar {
@@ -1558,16 +1603,16 @@ export default function App() {
         padding-top: 80px;
       }
       
-      body:not(.no-sidebar) .sidebar.open {
+      body:not(.no-sidebar).sidebar-expanded .sidebar {
         transform: translateX(0);
       }
       
-      body:not(.no-sidebar) .sidebar-overlay.open {
+      body:not(.no-sidebar).sidebar-expanded .sidebar-overlay {
         display: block;
       }
       
       body:not(.no-sidebar) .main-content {
-        margin-left: 0;
+        margin-left: 0 !important;
         padding: 6rem 1.5rem 4rem;
       }
       
@@ -1637,6 +1682,11 @@ export default function App() {
   </div>
 
   <div class="controls-panel">
+    <button id="sidebar-toggle" class="control-btn" title="切換大綱 (展開/折疊)">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 5h16M4 12h16M4 19h16M10 5v14" />
+      </svg>
+    </button>
     <button id="theme-toggle" class="control-btn" title="切換主題 (深色/淺色)">
       <svg class="theme-icon-sun" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -1663,15 +1713,24 @@ export default function App() {
       localStorage.setItem('exported-theme', nextTheme);
     });
 
+    const sidebarToggle = document.getElementById('sidebar-toggle');
     const menuToggle = document.getElementById('menu-toggle');
-    const sidebar = document.getElementById('sidebar');
     const sidebarOverlay = document.getElementById('sidebar-overlay');
 
-    function toggleSidebar() {
-      sidebar.classList.toggle('open');
-      sidebarOverlay.classList.toggle('open');
+    // Restore sidebar state from localStorage or use default
+    const storedSidebar = localStorage.getItem('exported-sidebar-state');
+    if (storedSidebar === 'expanded') {
+      document.body.classList.add('sidebar-expanded');
+    } else if (storedSidebar === 'collapsed') {
+      document.body.classList.remove('sidebar-expanded');
     }
 
+    function toggleSidebar() {
+      const isExpanded = document.body.classList.toggle('sidebar-expanded');
+      localStorage.setItem('exported-sidebar-state', isExpanded ? 'expanded' : 'collapsed');
+    }
+
+    if (sidebarToggle) sidebarToggle.addEventListener('click', toggleSidebar);
     if (menuToggle) menuToggle.addEventListener('click', toggleSidebar);
     if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
 
@@ -1679,7 +1738,8 @@ export default function App() {
     tocLinks.forEach(link => {
       link.addEventListener('click', () => {
         if (window.innerWidth <= 1024) {
-          toggleSidebar();
+          document.body.classList.remove('sidebar-expanded');
+          localStorage.setItem('exported-sidebar-state', 'collapsed');
         }
       });
     });
@@ -1742,7 +1802,6 @@ export default function App() {
 </html>`;
       
       const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
-      const fileName = `md2html_\${ts}.html`;
 
       if (action === 'download') {
         const url = URL.createObjectURL(blob);
@@ -2130,6 +2189,18 @@ export default function App() {
             ))}
           </select>
         )}
+
+        {/* 預設展開大綱 Checkbox */}
+        <label className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400 cursor-pointer select-none bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 px-2 py-1.5 rounded-lg">
+          <input
+            type="checkbox"
+            checked={defaultExpandOutline}
+            onChange={(e) => setDefaultExpandOutline(e.target.checked)}
+            className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500/30 accent-indigo-500 cursor-pointer"
+          />
+          <span className="hidden xs:inline">預設展開大綱</span>
+          <span className="inline xs:hidden">展開大綱</span>
+        </label>
 
         {/* Mobile PDF Dropdown Button */}
         <div className="relative flex sm:hidden pdf-dropdown-container">
