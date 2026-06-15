@@ -248,6 +248,11 @@ export default function App() {
   // --- Modals State ---
   const [showConfirmClear, setShowConfirmClear] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showFilenameModal, setShowFilenameModal] = useState(false);
+  const [pendingHtmlAction, setPendingHtmlAction] = useState(null);
+  const [tempExportFilename, setTempExportFilename] = useState('');
+  const [exportHTMLBlob, setExportHTMLBlob] = useState(null);
+  const [exportHTMLTitle, setExportHTMLTitle] = useState('');
 
   // --- Export Configurations ---
   const [exportTheme, setExportTheme] = useState('light'); // 'light' | 'dark'
@@ -1197,7 +1202,7 @@ export default function App() {
       left: 0;
       background-color: var(--bg-panel);
       border-right: 1px solid var(--border);
-      padding: 2rem 1.5rem;
+      padding: 1.5rem 1rem;
       display: flex;
       flex-direction: column;
       z-index: 10;
@@ -1209,41 +1214,40 @@ export default function App() {
       transform: translateX(0);
     }
     
-    .sidebar-header {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      margin-bottom: 2rem;
-    }
-    
-    .logo-box {
-      width: 42px;
-      height: 42px;
-      border-radius: 12px;
-      background: var(--accent-gradient);
-      color: #fff;
+    .sidebar-toggle-btn {
+      position: absolute;
+      top: 1.5rem;
+      right: -16px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background-color: var(--bg-panel);
+      border: 1px solid var(--border);
+      color: var(--text-main);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 10px rgba(99, 102, 241, 0.2);
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      z-index: 11;
+      transition: background-color 0.2s, color 0.2s, right 0.3s;
     }
     
-    .logo-icon {
-      width: 20px;
-      height: 20px;
+    body:not(.sidebar-expanded) .sidebar-toggle-btn {
+      right: -24px;
     }
     
-    .sidebar-title {
-      font-family: var(--font-heading);
-      font-size: 1.1rem;
-      font-weight: 800;
-      letter-spacing: -0.025em;
+    .sidebar-toggle-btn:hover {
+      background-color: var(--bg-card);
+      color: var(--accent);
     }
     
-    .sidebar-subtitle {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      font-weight: 500;
+    #toggle-arrow {
+      transition: transform 0.3s;
+    }
+    
+    body:not(.sidebar-expanded) #toggle-arrow {
+      transform: rotate(180deg);
     }
     
     .toc {
@@ -1714,20 +1718,14 @@ export default function App() {
 
   <div class="app-container">
     <aside id="sidebar" class="sidebar">
-      <div class="sidebar-header">
-        <div class="logo-box">
-          <svg class="logo-icon" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
-        </div>
-        <div>
-          <h2 class="sidebar-title">文件大綱</h2>
-          <p class="sidebar-subtitle">快速跳轉與導覽</p>
-        </div>
-      </div>
       <nav class="toc">
         ${tocHtml}
       </nav>
+      <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" aria-label="Toggle Sidebar" title="切換大綱 (展開/折疊)">
+        <svg id="toggle-arrow" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
     </aside>
 
     <main class="main-content">
@@ -1806,6 +1804,9 @@ export default function App() {
       updateSidebarState(!isCurrentlyExpanded);
     }
 
+    const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+
+    if (sidebarToggleBtn) sidebarToggleBtn.addEventListener('click', toggleSidebar);
     if (menuToggle) menuToggle.addEventListener('click', toggleSidebar);
     if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
 
@@ -1876,32 +1877,55 @@ export default function App() {
 </html>`;
       
       const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+      
+      setExportHTMLBlob(blob);
+      setExportHTMLTitle(title);
+      setTempExportFilename(fileName);
+      setPendingHtmlAction(action);
+      setShowFilenameModal(true);
+    } catch (err) {
+      console.error('HTML generation failed:', err);
+      showToast('❌ 產生 HTML 失敗，請重試！', 'error');
+    }
+  };
 
-      if (action === 'download') {
-        const url = URL.createObjectURL(blob);
+  const proceedExportHTML = async () => {
+    if (!exportHTMLBlob || !pendingHtmlAction) return;
+    
+    let fileName = tempExportFilename.trim();
+    if (!fileName) {
+      fileName = 'export.html';
+    }
+    if (!fileName.toLowerCase().endsWith('.html')) {
+      fileName += '.html';
+    }
+
+    setShowFilenameModal(false);
+    
+    try {
+      if (pendingHtmlAction === 'download') {
+        const url = URL.createObjectURL(exportHTMLBlob);
         const link = document.createElement('a');
         link.href = url;
         link.download = fileName;
         link.click();
         URL.revokeObjectURL(url);
         showToast('✅ HTML 已成功儲存至本地！', 'success');
-      } else if (action === 'share') {
-        const file = new File([blob], fileName, { type: 'text/html' });
+      } else if (pendingHtmlAction === 'share') {
+        const file = new File([exportHTMLBlob], fileName, { type: 'text/html' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
             await navigator.share({
               files: [file],
-              title: title,
+              title: exportHTMLTitle,
               text: '這是從 Markdown 編輯器產生的美化網頁文檔。'
             });
             showToast('✅ 分享視窗已開啟！', 'success');
           } catch (shareErr) {
             if (shareErr.name === 'AbortError') {
-              // User cancelled the share dialog, do nothing
               return;
             }
-            // If share failed for other reasons (e.g. system block), fall back to download
-            const url = URL.createObjectURL(blob);
+            const url = URL.createObjectURL(exportHTMLBlob);
             const link = document.createElement('a');
             link.href = url;
             link.download = fileName;
@@ -1910,7 +1934,7 @@ export default function App() {
             showToast('⚠️ 分享失敗，已自動為您下載 HTML 文件！', 'warning');
           }
         } else {
-          const url = URL.createObjectURL(blob);
+          const url = URL.createObjectURL(exportHTMLBlob);
           const link = document.createElement('a');
           link.href = url;
           link.download = fileName;
@@ -1921,9 +1945,12 @@ export default function App() {
       }
     } catch (err) {
       if (err.name !== 'AbortError') {
-        console.error('HTML generation failed:', err);
-        showToast('❌ 產生 HTML 失敗，請重試！', 'error');
+        console.error('HTML action failed:', err);
+        showToast('❌ 處理 HTML 失敗，請重試！', 'error');
       }
+    } finally {
+      setPendingHtmlAction(null);
+      setExportHTMLBlob(null);
     }
   };
 
@@ -2956,6 +2983,51 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* --- MODAL: CONFIRM FILENAME --- */}
+      {showFilenameModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-all duration-300 animate-fade-in">
+          <div className="w-full max-w-md p-6 rounded-2xl glass shadow-2xl dark:shadow-indigo-950/20 scale-100 transition-all border border-slate-200/50 dark:border-slate-800/80">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-500 rounded-xl">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div className="flex-1 w-full">
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100">確認匯出 HTML 檔案名稱</h3>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  請確認或修改即將匯出的 HTML 檔案名稱：
+                </p>
+                <input
+                  type="text"
+                  value={tempExportFilename}
+                  onChange={(e) => setTempExportFilename(e.target.value)}
+                  className="w-full mt-3 px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/70 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-slate-200 font-medium"
+                  placeholder="請輸入檔案名稱"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button 
+                onClick={() => {
+                  setShowFilenameModal(false);
+                  setPendingHtmlAction(null);
+                }}
+                className="px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+              >
+                取消
+              </button>
+              <button 
+                onClick={proceedExportHTML}
+                className="px-4.5 py-2 text-sm font-bold text-white bg-gradient-to-r from-indigo-500 to-purple-650 hover:from-indigo-600 hover:to-purple-750 rounded-xl shadow-md shadow-indigo-500/10 active:scale-95 transition-all"
+              >
+                確認並{pendingHtmlAction === 'share' ? '分享' : '下載'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- MODAL: CONFIRM CLEAR --- */}
       {showConfirmClear && (

@@ -29,12 +29,15 @@
 
 4. **全新美化 HTML 匯出與分享 (具備雙欄文件大綱)**
    - 支援下載或分享「美化網頁 HTML」檔案。
-   - **雙欄自適應佈局**：預設為雙欄排版，左邊為快速跳轉段落的文件大綱（TOC），右邊為文章主體。
-   - **大綱快速收合**：在產出的網頁中，右上角提供「顯示大綱」的核取方塊（行動端為自動空間縮減），讓讀者可隨時切換大綱的收合或展示，且會將展開狀態記住於 `localStorage` 中。展開大綱時內容會自動收縮自適應螢幕大小。
+   - **雙欄自適應佈局**：預設為雙欄排版，左邊為快速跳轉段落的文件大綱（TOC），右邊為文章主體，排版精緻無雜亂標題。
+   - **雙重收合大綱功能**：
+     - **左側大綱收合按鈕/分頁**：在大綱の右邊緣提供了一個極具質感的懸浮圓形按鈕（折疊/展開指示箭頭），點擊可流暢地收合或拉出左側大綱。
+     - **右上角顯示大綱核取方塊**：在產出的網頁右上角提供「顯示大綱」核取方塊，可同步連動控制大綱的收合，狀態自動保存於 `localStorage`，大綱展開時右側內文自動收縮適應螢幕。
    - **Scrollspy 滾動偵測**：當讀者滾動文章時，左側大綱對應的段落會自動高亮點亮，讓讀者極易辨識目前閱讀位置。
+   - **匯出前檔名確認**：在點擊匯出 HTML 時，系統會彈出一個毛玻璃風格的對話框讓使用者預覽並有機會任意修改自訂檔名，確認後才執行下載或分享。
    - **客製化檔名規律**：
-     - 當 Markdown 內容中含有 `#` 標題（例如 `# 標題`）時，產出檔名為：`md2html_標題_YYYYMMDD.html`（自動去除了 `#` 字首且時間戳記只保留年月日）。
-     - 當無 `#` 標題時，檔名則採用毫秒級別完整時間戳記：`md2html_YYYYMMDDssss.html`。
+     - 當 Markdown 內容中含有 `#` 標題（例如 `# 標題`）時，預設產出檔名為：`md2html_標題_YYYYMMDD.html`（自動去除了 `#` 字首且時間戳記只保留年月日）。
+     - 當無 `#` 標題時，檔名則預設採用毫秒級別完整時間戳記：`md2html_YYYYMMDDssss.html`。
 
 5. **深度社群分享優化 (針對 LINE / Desktop / Mobile)**
    - **一鍵社群分享**：在支援的行動裝置上，可直接呼叫系統分享傳送圖片/PDF 等檔案至 LINE、Messenger 等。
@@ -114,10 +117,13 @@ Welcome to the **Universal Markdown Editor Converter**! This is a visually stunn
 4. **HTML Page Export with Collapsible Sidebar Outline**
    - Supports downloading and sharing as a fully functional, styled HTML page.
    - **Responsive Split Layout**: Features a double-column view by default, with a clickable Table of Contents (TOC) sidebar on the left and readable content on the right.
-   - **Interactive Sidebar Control Checkbox**: Includes a "Show Outline" checkbox directly on the exported HTML page to collapse/expand the sidebar. Toggling the sidebar automatically shrinks/resizes the content area to fit the viewport. The preference is stored in `localStorage`.
+   - **Dual Sidebar Toggle Mechanisms**:
+     - **Left Toggle Tab/Button**: A sleek, circular hover-button floats on the right border of the sidebar, allowing readers to slide the TOC in and out.
+     - **Top-Right "Show Outline" Checkbox**: A checkbox in the top-right controls-panel toggles the sidebar's collapse state, syncing with localStorage and shrinking the main text column layout.
    - **Scrollspy Indicator**: Highlight current active header in the sidebar dynamically as you scroll through the page.
+   - **Filename Confirmation Dialog**: Shows a frosted-glass confirmation modal before download/share, allowing the user to rename the HTML file as needed.
    - **Customized Filename Rules**:
-     - If a `#` heading (e.g. `# Title`) is found, the file is named `md2html_Title_YYYYMMDD.html` (the `#` prefix is stripped and only the `YYYYMMDD` date is used for timestamp).
+     - If a `#` heading (e.g. `# Title`) is found, the default filename is `md2html_Title_YYYYMMDD.html` (the `#` prefix is stripped and only the `YYYYMMDD` date is used for timestamp).
      - If no `#` heading is found, it falls back to full millisecond-precision timestamp: `md2html_YYYYMMDDssss.html`.
 
 5. **Deep Social Share Optimization (PC & LINE Compatibility)**
