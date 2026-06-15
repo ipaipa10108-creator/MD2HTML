@@ -1020,6 +1020,780 @@ export default function App() {
     }
   };
 
+  const escapeHtml = (text) => {
+    if (!text) return '';
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
+
+  const generateExportHTML = () => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(readingHtml, 'text/html');
+    const docHeadings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    const exportedHeadings = [];
+    
+    docHeadings.forEach((heading, index) => {
+      const id = `h-${index}`;
+      heading.setAttribute('id', id);
+      exportedHeadings.push({
+        id,
+        level: parseInt(heading.tagName.substring(1)),
+        text: heading.textContent || ''
+      });
+    });
+    
+    const articleContentHtml = doc.body.innerHTML;
+    return { articleContentHtml, exportedHeadings };
+  };
+
+  const handleExportHTML = async (action) => {
+    showToast('⏳ 正在產生 HTML 文件，請稍候...', 'info');
+    try {
+      const { articleContentHtml, exportedHeadings } = generateExportHTML();
+      
+      let tocHtml = '';
+      if (exportedHeadings.length === 0) {
+        tocHtml = '<div class="toc-empty">無章節大綱</div>';
+      } else {
+        exportedHeadings.forEach(h => {
+          let levelClass = 'l1';
+          if (h.level === 3) levelClass = 'l2';
+          else if (h.level >= 4) levelClass = 'l3';
+          
+          tocHtml += `<a class="toc-link ${levelClass}" href="#${h.id}" data-id="${h.id}">
+            <span class="toc-bullet"></span>
+            <span class="toc-text">${escapeHtml(h.text)}</span>
+          </a>\n`;
+        });
+      }
+
+      const title = exportedHeadings.length > 0 ? exportedHeadings[0].text : 'Markdown 匯出文件';
+      const bodyClass = exportedHeadings.length === 0 ? 'no-sidebar' : '';
+
+      const fullHtml = `<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(title)}</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Highlight.js for code blocks syntax highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  
+  <style>
+    /* Styling variables and aesthetics */
+    :root {
+      --bg-body: #f8fafc;
+      --bg-panel: #ffffff;
+      --bg-card: #f1f5f9;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --accent: #6366f1;
+      --accent-gradient: linear-gradient(135deg, #6366f1, #4f46e5);
+      --accent-light: rgba(99, 102, 241, 0.08);
+      --border: #e2e8f0;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+      --font-heading: 'Outfit', 'Noto Sans TC', sans-serif;
+      --font-body: 'Inter', 'Noto Sans TC', system-ui, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --toc-hover: rgba(99, 102, 241, 0.04);
+    }
+    
+    [data-theme="dark"] {
+      --bg-body: #090d16;
+      --bg-panel: #0f172a;
+      --bg-card: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #818cf8;
+      --accent-gradient: linear-gradient(135deg, #818cf8, #6366f1);
+      --accent-light: rgba(129, 140, 248, 0.12);
+      --border: #1e293b;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+      --toc-hover: rgba(129, 140, 248, 0.06);
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 80px;
+    }
+    
+    body {
+      background-color: var(--bg-body);
+      color: var(--text-main);
+      font-family: var(--font-body);
+      font-size: 16px;
+      line-height: 1.8;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    
+    .app-container {
+      display: flex;
+      max-width: 1440px;
+      margin: 0 auto;
+      position: relative;
+    }
+    
+    .sidebar {
+      width: 300px;
+      height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
+      background-color: var(--bg-panel);
+      border-right: 1px solid var(--border);
+      padding: 2rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+      transition: transform 0.3s, background-color 0.3s, border-color 0.3s;
+    }
+    
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+    }
+    
+    .logo-box {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: var(--accent-gradient);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 10px rgba(99, 102, 241, 0.2);
+    }
+    
+    .logo-icon {
+      width: 20px;
+      height: 20px;
+    }
+    
+    .sidebar-title {
+      font-family: var(--font-heading);
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+    }
+    
+    .sidebar-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    
+    .toc {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+      position: relative;
+    }
+    
+    .toc-link {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.6rem 0.8rem;
+      margin: 0.25rem 0;
+      color: var(--text-muted);
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      line-height: 1.4;
+      transition: all 0.2s;
+    }
+    
+    .toc-link:hover {
+      color: var(--text-main);
+      background-color: var(--toc-hover);
+    }
+    
+    .toc-link.active {
+      color: var(--accent);
+      background-color: var(--accent-light);
+      font-weight: 700;
+    }
+    
+    .toc-bullet {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--border);
+      margin-top: 0.5rem;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    
+    .toc-link.active .toc-bullet {
+      background-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      transform: scale(1.3);
+    }
+    
+    .toc-link.l1 {
+      font-weight: 600;
+    }
+    .toc-link.l2 {
+      padding-left: 1.75rem;
+      font-size: 0.8rem;
+    }
+    .toc-link.l3 {
+      padding-left: 2.75rem;
+      font-size: 0.75rem;
+    }
+    
+    .toc-empty {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      text-align: center;
+      margin-top: 3rem;
+      font-style: italic;
+    }
+    
+    .main-content {
+      flex: 1;
+      margin-left: 300px;
+      padding: 3rem 4rem 6rem;
+      min-width: 0;
+      transition: margin 0.3s;
+    }
+    
+    .markdown-body {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    
+    .markdown-body h1 {
+      font-family: var(--font-heading);
+      font-size: 2.5rem;
+      font-weight: 800;
+      line-height: 1.3;
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 2px solid var(--border);
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .markdown-body h2 {
+      font-family: var(--font-heading);
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1.4;
+      margin-top: 2.5rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .markdown-body h3 {
+      font-family: var(--font-heading);
+      font-size: 1.35rem;
+      font-weight: 600;
+      line-height: 1.4;
+      margin-top: 2rem;
+      margin-bottom: 1rem;
+    }
+    
+    .markdown-body p {
+      margin-bottom: 1.25rem;
+    }
+    
+    .markdown-body a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+      border-bottom: 1px dashed var(--accent);
+      transition: all 0.2s;
+    }
+    
+    .markdown-body a:hover {
+      color: var(--accent);
+      border-bottom-style: solid;
+      background-color: var(--accent-light);
+    }
+    
+    .markdown-body ul, .markdown-body ol {
+      padding-left: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .markdown-body li {
+      margin-bottom: 0.5rem;
+    }
+    
+    .markdown-body blockquote {
+      border-left: 4px solid var(--accent);
+      padding: 0.75rem 1.25rem;
+      background-color: var(--bg-card);
+      border-radius: 0 12px 12px 0;
+      margin: 1.5rem 0;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+    
+    .markdown-body code {
+      font-family: var(--font-mono);
+      background-color: var(--bg-card);
+      padding: 0.2rem 0.4rem;
+      border-radius: 6px;
+      font-size: 0.85em;
+    }
+    
+    .markdown-body pre {
+      margin: 1.5rem 0;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+    
+    .markdown-body pre code {
+      font-family: var(--font-mono);
+      font-size: 0.9em;
+      padding: 1.25rem;
+      background-color: #0f172a;
+      color: #f8fafc;
+      border-radius: 0;
+      display: block;
+      overflow-x: auto;
+    }
+    
+    .markdown-body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 2rem 0;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+    
+    .markdown-body th, .markdown-body td {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .markdown-body th {
+      background-color: var(--bg-card);
+      font-weight: 600;
+      font-family: var(--font-heading);
+    }
+    
+    .markdown-body tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .markdown-body tr:nth-child(even) {
+      background-color: rgba(0, 0, 0, 0.02);
+    }
+    
+    [data-theme="dark"] .markdown-body tr:nth-child(even) {
+      background-color: rgba(255, 255, 255, 0.02);
+    }
+    
+    .markdown-body hr {
+      border: 0;
+      height: 1px;
+      background-color: var(--border);
+      margin: 2.5rem 0;
+    }
+    
+    .controls-panel {
+      position: fixed;
+      top: 1.5rem;
+      right: 1.5rem;
+      display: flex;
+      gap: 0.5rem;
+      z-index: 50;
+    }
+    
+    .control-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background-color: var(--bg-panel);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      transition: all 0.2s;
+    }
+    
+    .control-btn:hover {
+      background-color: var(--bg-card);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+    
+    .theme-icon-sun { display: none; }
+    .theme-icon-moon { display: block; }
+    [data-theme="dark"] .theme-icon-sun { display: block; }
+    [data-theme="dark"] .theme-icon-moon { display: none; }
+    
+    .mobile-header {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background-color: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1rem;
+      z-index: 40;
+      box-shadow: var(--shadow);
+    }
+    
+    .mobile-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .mobile-logo {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: var(--accent-gradient);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .mobile-title {
+      font-family: var(--font-heading);
+      font-size: 0.95rem;
+      font-weight: 800;
+    }
+    
+    .mobile-active-section {
+      font-size: 0.75rem;
+      color: var(--accent);
+      font-weight: 600;
+      max-width: 140px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .menu-toggle-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.5rem;
+    }
+    
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background-color: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(4px);
+      z-index: 9;
+    }
+    
+    .toc::-webkit-scrollbar {
+      width: 4px;
+    }
+    .toc::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .toc::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 2px;
+    }
+    
+    body.no-sidebar .sidebar {
+      display: none;
+    }
+    body.no-sidebar .main-content {
+      margin-left: 0;
+      padding: 3rem 2rem 6rem;
+    }
+    body.no-sidebar .mobile-header {
+      display: none;
+    }
+    
+    @media (max-width: 1024px) {
+      body:not(.no-sidebar) .sidebar {
+        transform: translateX(-100%);
+        box-shadow: var(--shadow-lg);
+        height: 100%;
+        padding-top: 80px;
+      }
+      
+      body:not(.no-sidebar) .sidebar.open {
+        transform: translateX(0);
+      }
+      
+      body:not(.no-sidebar) .sidebar-overlay.open {
+        display: block;
+      }
+      
+      body:not(.no-sidebar) .main-content {
+        margin-left: 0;
+        padding: 6rem 1.5rem 4rem;
+      }
+      
+      body:not(.no-sidebar) .mobile-header {
+        display: flex;
+      }
+      
+      .controls-panel {
+        top: 9px;
+        right: 1rem;
+      }
+      
+      .control-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+      }
+    }
+  </style>
+</head>
+<body class="${bodyClass}" data-theme="light">
+  
+  <header class="mobile-header">
+    <div class="mobile-brand">
+      <button id="menu-toggle" class="menu-toggle-btn" aria-label="Toggle navigation">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+      <div class="mobile-logo">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+      </div>
+      <div>
+        <h1 class="mobile-title">文件大綱</h1>
+      </div>
+    </div>
+    <div id="mobile-current-title" class="mobile-active-section"></div>
+  </header>
+
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="app-container">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-box">
+          <svg class="logo-icon" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+        </div>
+        <div>
+          <h2 class="sidebar-title">文件大綱</h2>
+          <p class="sidebar-subtitle">快速跳轉與導覽</p>
+        </div>
+      </div>
+      <nav class="toc">
+        ${tocHtml}
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <article class="markdown-body">
+        ${articleContentHtml}
+      </article>
+    </main>
+  </div>
+
+  <div class="controls-panel">
+    <button id="theme-toggle" class="control-btn" title="切換主題 (深色/淺色)">
+      <svg class="theme-icon-sun" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+      <svg class="theme-icon-moon" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+      </svg>
+    </button>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script>
+    hljs.highlightAll();
+
+    const themeToggle = document.getElementById('theme-toggle');
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+    const storedTheme = localStorage.getItem('exported-theme') || (systemPrefersDark.matches ? 'dark' : 'light');
+    document.body.setAttribute('data-theme', storedTheme);
+
+    themeToggle.addEventListener('click', () => {
+      const currentTheme = document.body.getAttribute('data-theme');
+      const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      document.body.setAttribute('data-theme', nextTheme);
+      localStorage.setItem('exported-theme', nextTheme);
+    });
+
+    const menuToggle = document.getElementById('menu-toggle');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+    function toggleSidebar() {
+      sidebar.classList.toggle('open');
+      sidebarOverlay.classList.toggle('open');
+    }
+
+    if (menuToggle) menuToggle.addEventListener('click', toggleSidebar);
+    if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    tocLinks.forEach(link => {
+      link.addEventListener('click', () => {
+        if (window.innerWidth <= 1024) {
+          toggleSidebar();
+        }
+      });
+    });
+
+    const headings = document.querySelectorAll('.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4, .markdown-body h5, .markdown-body h6');
+    const mobileTitleEl = document.getElementById('mobile-current-title');
+
+    function updateActiveHeading() {
+      let activeId = null;
+      const scrollPosition = window.scrollY + 120;
+      
+      headings.forEach((heading) => {
+        if (heading.offsetTop <= scrollPosition) {
+          activeId = heading.getAttribute('id');
+        }
+      });
+
+      if (!activeId && headings.length > 0) {
+        activeId = headings[0].getAttribute('id');
+      }
+
+      tocLinks.forEach((link) => {
+        const linkId = link.getAttribute('data-id');
+        if (linkId === activeId) {
+          link.classList.add('active');
+          if (mobileTitleEl) {
+            mobileTitleEl.textContent = link.querySelector('.toc-text').textContent;
+          }
+          const tocContainer = document.querySelector('.toc');
+          if (tocContainer) {
+            const linkTop = link.offsetTop;
+            const containerScrollTop = tocContainer.scrollTop;
+            const containerHeight = tocContainer.clientHeight;
+            if (linkTop < containerScrollTop || linkTop > (containerScrollTop + containerHeight - 50)) {
+              tocContainer.scrollTo({
+                top: linkTop - containerHeight / 2,
+                behavior: 'smooth'
+              });
+            }
+          }
+        } else {
+          link.classList.remove('active');
+        }
+      });
+    }
+
+    let scrollTimeout;
+    window.addEventListener('scroll', () => {
+      if (!scrollTimeout) {
+        scrollTimeout = requestAnimationFrame(() => {
+          updateActiveHeading();
+          scrollTimeout = null;
+        });
+      }
+    });
+
+    updateActiveHeading();
+  </script>
+</body>
+</html>`;
+      
+      const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+      const fileName = `md2html_\${ts}.html`;
+
+      if (action === 'download') {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        link.click();
+        URL.revokeObjectURL(url);
+        showToast('✅ HTML 已成功儲存至本地！', 'success');
+      } else if (action === 'share') {
+        const file = new File([blob], fileName, { type: 'text/html' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: title,
+              text: '這是從 Markdown 編輯器產生的美化網頁文檔。'
+            });
+            showToast('✅ 分享視窗已開啟！', 'success');
+          } catch (shareErr) {
+            if (shareErr.name === 'AbortError') {
+              // User cancelled the share dialog, do nothing
+              return;
+            }
+            // If share failed for other reasons (e.g. system block), fall back to download
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            link.click();
+            URL.revokeObjectURL(url);
+            showToast('⚠️ 分享失敗，已自動為您下載 HTML 文件！', 'warning');
+          }
+        } else {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = fileName;
+          link.click();
+          URL.revokeObjectURL(url);
+          showToast('⚠️ 本裝置不支援直接分享 HTML，已自動為您下載！', 'warning');
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('HTML generation failed:', err);
+        showToast('❌ 產生 HTML 失敗，請重試！', 'error');
+      }
+    }
+  };
+
   const getTimestampString = () => {
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -1362,12 +2136,12 @@ export default function App() {
           <button
             onClick={() => setActivePdfDropdown(activePdfDropdown === 'mobile-pdf' ? null : 'mobile-pdf')}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20 hover:bg-white dark:hover:bg-slate-800 border border-indigo-200/30 dark:border-indigo-900/30 rounded-lg shadow-sm transition-all active:scale-95"
-            title="PDF 匯出與分享"
+            title="文件匯出與分享 (PDF/HTML)"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
             </svg>
-            <span>PDF 匯出</span>
+            <span>匯出/分享</span>
             <svg className="w-2.5 h-2.5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
             </svg>
@@ -1426,6 +2200,33 @@ export default function App() {
                 <div>
                   <div className="font-bold text-xs">分享文字 PDF</div>
                   <div className="text-[10px] text-slate-400 font-normal">傳送文字版 PDF</div>
+                </div>
+              </button>
+              <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-1" />
+              <button
+                onClick={() => {
+                  handleExportHTML('download');
+                  setActivePdfDropdown(null);
+                }}
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
+              >
+                <span className="text-base">🌐</span>
+                <div>
+                  <div className="font-bold text-xs">下載美化 HTML</div>
+                  <div className="text-[10px] text-slate-400 font-normal">快速跳轉大綱與雙欄排版</div>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  handleExportHTML('share');
+                  setActivePdfDropdown(null);
+                }}
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
+              >
+                <span className="text-base">📤</span>
+                <div>
+                  <div className="font-bold text-xs">分享美化 HTML</div>
+                  <div className="text-[10px] text-slate-400 font-normal">傳送雙欄大綱 HTML</div>
                 </div>
               </button>
             </div>
@@ -1590,18 +2391,18 @@ export default function App() {
           )}
         </div>
 
-        {/* PDF Export Dropdown */}
+        {/* PDF/HTML Export Dropdown */}
         {isReading && (
           <div className="relative hidden sm:flex pdf-dropdown-container">
             <button
               onClick={() => setActivePdfDropdown(activePdfDropdown === `${uniqueKey}-pdf` ? null : `${uniqueKey}-pdf`)}
               className="px-2 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20 hover:bg-white dark:hover:bg-slate-800 border border-indigo-200/30 dark:border-indigo-900/30 rounded-lg transition-all flex items-center gap-1"
-              title="匯出此閱讀排版為 PDF"
+              title="文件匯出與分享 (PDF/HTML)"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
               </svg>
-              <span>PDF 匯出</span>
+              <span>匯出/分享</span>
               <svg className="w-2.5 h-2.5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
               </svg>
@@ -1660,6 +2461,33 @@ export default function App() {
                   <div>
                     <div className="font-bold text-[11px]">分享文字 PDF</div>
                     <div className="text-[9px] text-slate-400 font-normal">傳送文字版 PDF</div>
+                  </div>
+                </button>
+                <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-1" />
+                <button
+                  onClick={() => {
+                    handleExportHTML('download');
+                    setActivePdfDropdown(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
+                >
+                  <span className="text-sm">🌐</span>
+                  <div>
+                    <div className="font-bold text-[11px]">下載美化 HTML</div>
+                    <div className="text-[9px] text-slate-400 font-normal">快速跳轉大綱與雙欄排版</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    handleExportHTML('share');
+                    setActivePdfDropdown(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-305 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
+                >
+                  <span className="text-sm">📤</span>
+                  <div>
+                    <div className="font-bold text-[11px]">分享美化 HTML</div>
+                    <div className="text-[9px] text-slate-400 font-normal">傳送雙欄大綱 HTML</div>
                   </div>
                 </button>
               </div>
