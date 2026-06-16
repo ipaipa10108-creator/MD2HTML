@@ -3,6 +3,9 @@ import { marked } from 'marked';
 import TurndownService from 'turndown';
 import html2canvas from 'html2canvas';
 import JSZip from 'jszip';
+import DOMPurify from 'dompurify';
+import hljs from 'highlight.js';
+import 'highlight.js/styles/github-dark.css';
 
 // Initialize and configure Turndown Service for HTML to MD conversion
 const turndownService = new TurndownService({
@@ -64,6 +67,33 @@ turndownService.addRule('fencedCodeBlock', {
   }
 });
 
+// Custom rule for parsing mermaid wrappers back to markdown code blocks
+turndownService.addRule('mermaidBlock', {
+  filter: function (node) {
+    return node.classList.contains('mermaid-wrapper');
+  },
+  replacement: function (content, node) {
+    const encoded = node.getAttribute('data-mermaid-code') || '';
+    let rawCode;
+    try {
+      rawCode = decodeURIComponent(escape(window.atob(encoded)));
+    } catch {
+      rawCode = '';
+    }
+    return `\n\`\`\`mermaid\n${rawCode}\n\`\`\`\n`;
+  }
+});
+
+// Custom rule for stripping YAML metadata cards from HTML conversion
+turndownService.addRule('metadataCard', {
+  filter: function (node) {
+    return node.classList.contains('metadata-card-wrapper');
+  },
+  replacement: function () {
+    return '';
+  }
+});
+
 // Configure marked to allow safe HTML tags and keep styling clean
 marked.setOptions({
   gfm: true,
@@ -74,6 +104,12 @@ marked.use({
   renderer: {
     code({ text, lang }) {
       const language = lang || '';
+      if (language === 'mermaid') {
+        const encodedContent = window.btoa(unescape(encodeURIComponent(text)));
+        return `<div class="mermaid-wrapper" data-mermaid-code="${encodedContent}">
+          <div class="mermaid">${text}</div>
+        </div>`;
+      }
       return `<div class="code-block-wrapper">
   <button class="copy-code-btn" aria-label="Copy code" title="複製此程式碼">
     <svg class="copy-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
@@ -86,6 +122,18 @@ marked.use({
   </button>
   <pre><code class="language-${language}">${text}</code></pre>
 </div>`;
+    },
+    listitem(item) {
+      let itemHtml = item.text;
+      if (item.task) {
+        const checkedAttr = item.checked ? 'checked=""' : '';
+        itemHtml = `<span class="flex items-start gap-2">
+          <input type="checkbox" disabled ${checkedAttr} class="w-4 h-4 mt-1 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500/30 accent-indigo-500 cursor-default shrink-0" />
+          <span class="task-list-text">${item.text}</span>
+        </span>`;
+        return `<li class="task-list-item list-none py-0.5">${itemHtml}</li>`;
+      }
+      return `<li>${itemHtml}</li>`;
     }
   }
 });
@@ -221,6 +269,124 @@ const findDOMNodeByText = (root, searchText) => {
   return null;
 };
 
+// Helper to parse YAML Front Matter
+const parseFrontMatter = (md) => {
+  if (!md || !md.startsWith('---')) return { markdown: md, metadata: null, rawFrontMatter: '' };
+  
+  const match = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+  if (!match) return { markdown: md, metadata: null, rawFrontMatter: '' };
+  
+  const rawFrontMatter = match[0];
+  const yamlText = match[1];
+  const remainingMarkdown = md.substring(match[0].length);
+  
+  const metadata = {};
+  const lines = yamlText.split(/\r?\n/);
+  lines.forEach(line => {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx !== -1) {
+      const key = line.substring(0, colonIdx).trim().toLowerCase();
+      let value = line.substring(colonIdx + 1).trim();
+      
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.substring(1, value.length - 1);
+      }
+      
+      if (key === 'tags') {
+        if (value.startsWith('[') && value.endsWith(']')) {
+          metadata.tags = value.substring(1, value.length - 1).split(',').map(t => t.trim().replace(/['"]/g, ''));
+        } else {
+          metadata.tags = value.split(',').map(t => t.trim()).filter(Boolean);
+        }
+      } else if (key === 'draft') {
+        metadata.draft = value === 'true';
+      } else {
+        metadata[key] = value;
+      }
+    }
+  });
+  
+  return { markdown: remainingMarkdown, metadata, rawFrontMatter };
+};
+
+// Render YAML metadata card
+const renderMetadataCard = (metadata) => {
+  if (!metadata) return '';
+  
+  const title = metadata.title || '';
+  const description = metadata.description || metadata.desc || '';
+  const date = metadata.date || '';
+  const tags = metadata.tags || [];
+  const isDraft = metadata.draft;
+  
+  if (!title && !description && !date && tags.length === 0 && !isDraft) return '';
+  
+  const tagsHtml = tags.map(tag => `
+    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-100/50 dark:border-indigo-900/30">
+      # ${tag}
+    </span>
+  `).join(' ');
+
+  const draftBadgeHtml = isDraft ? `
+    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 uppercase tracking-wider animate-pulse">
+      Draft 草稿
+    </span>
+  ` : '';
+
+  return `
+    <div class="metadata-card-wrapper mb-8 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white/50 dark:bg-slate-900/30 backdrop-blur-sm shadow-sm flex flex-col gap-4" contenteditable="false">
+      <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div class="flex flex-col gap-1.5">
+          ${draftBadgeHtml}
+          <h2 class="text-xl md:text-2xl font-extrabold text-slate-800 dark:text-slate-100 m-0 tracking-tight" style="border-bottom: none; margin-top: 0; padding-bottom: 0;">
+            ${title}
+          </h2>
+        </div>
+        ${date ? `<span class="text-xs font-medium text-slate-400 dark:text-slate-500 font-mono">${date}</span>` : ''}
+      </div>
+      ${description ? `<p class="text-sm text-slate-500 dark:text-slate-400 m-0 leading-relaxed">${description}</p>` : ''}
+      ${tags.length > 0 ? `<div class="flex flex-wrap gap-2 mt-1">${tagsHtml}</div>` : ''}
+    </div>
+  `;
+};
+
+// HTML Sanitizer using DOMPurify
+const sanitizeHtml = (htmlContent) => {
+  return DOMPurify.sanitize(htmlContent, {
+    ADD_TAGS: ['use'],
+    ADD_ATTR: ['target', 'aria-label', 'contenteditable', 'suppresscontenteditablewarning', 'data-mermaid-code', 'data-placeholder'],
+    USE_PROFILES: { html: true, svg: true }
+  });
+};
+
+// Helper to resolve relative path images to blob URLs
+const resolveImageSources = (htmlString, map) => {
+  if (!map || Object.keys(map).length === 0) return htmlString;
+  
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(htmlString, 'text/html');
+  const imgs = doc.querySelectorAll('img');
+  let modified = false;
+  
+  imgs.forEach(img => {
+    const src = img.getAttribute('src');
+    if (src) {
+      const decodedSrc = decodeURIComponent(src);
+      const cleanSrc = decodedSrc.replace(/^\.\//, '');
+      
+      for (const [key, value] of Object.entries(map)) {
+        if (key === cleanSrc || key.endsWith('/' + cleanSrc) || cleanSrc.endsWith('/' + key)) {
+          img.setAttribute('src', value);
+          modified = true;
+          break;
+        }
+      }
+    }
+  });
+  
+  return modified ? doc.body.innerHTML : htmlString;
+};
+
 // Cache variable for the dynamically loaded Chinese font
 let cachedFontBase64 = null;
 
@@ -259,16 +425,23 @@ export default function App() {
   })();
 
   const defaultMarkdown = sharedText || initialMarkdown;
-  const defaultHtml = marked.parse(defaultMarkdown);
+  
+  const initialParse = parseFrontMatter(defaultMarkdown);
+  const defaultHtml = sanitizeHtml(marked.parse(initialParse.markdown));
+  const defaultReadingHtml = renderMetadataCard(initialParse.metadata) + defaultHtml;
 
   // --- Content State ---
   const [markdown, setMarkdown] = useState(defaultMarkdown);
   const [html, setHtml] = useState(() => defaultHtml);
-  const [readingHtml, setReadingHtml] = useState(() => defaultHtml);
+  const [readingHtml, setReadingHtml] = useState(() => defaultReadingHtml);
+  const [frontMatterRaw, setFrontMatterRaw] = useState(initialParse.rawFrontMatter);
 
   // --- Drag and Drop File State ---
   const [isDragging, setIsDragging] = useState(false);
   const dragCounterRef = useRef(0);
+
+  // --- Local Relative Image Mapping State ---
+  const [imageMap, setImageMap] = useState({});
 
   // --- Layout State ---
   const [layout, setLayout] = useState('single'); // default changed to 'single'
@@ -394,12 +567,83 @@ export default function App() {
   const handleMarkdownChangeRef = useRef(handleMarkdownChange);
   const handleHtmlChangeRef = useRef(handleHtmlChange);
   const showToastRef = useRef(showToast);
+  const imageMapRef = useRef(imageMap);
 
   useEffect(() => {
     handleMarkdownChangeRef.current = handleMarkdownChange;
     handleHtmlChangeRef.current = handleHtmlChange;
     showToastRef.current = showToast;
+    imageMapRef.current = imageMap;
   });
+
+  const handleLoadLocalImages = (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    const newMap = { ...imageMap };
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const path = file.webkitRelativePath || file.name;
+      // Strip root folder name if webkitRelativePath exists
+      const parts = path.split('/');
+      const cleanKey = parts.slice(1).join('/') || file.name;
+      
+      const url = URL.createObjectURL(file);
+      newMap[cleanKey] = url;
+      newMap[file.name] = url;
+    }
+    setImageMap(newMap);
+    showToast(`📁 已成功載入 ${files.length} 張本機圖片以解析相對路徑！`, 'success');
+  };
+
+  const [mermaidLoaded, setMermaidLoaded] = useState(false);
+
+  // Lazy-load Mermaid only when necessary
+  useEffect(() => {
+    const containsMermaid = markdown.includes('```mermaid');
+    if (containsMermaid) {
+      if (!mermaidLoaded) {
+        import('mermaid').then((mermaidModule) => {
+          const mermaid = mermaidModule.default;
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: darkMode ? 'dark' : 'default',
+            securityLevel: 'loose',
+          });
+          setMermaidLoaded(true);
+          setTimeout(() => {
+            mermaid.run({ querySelector: '.mermaid' }).catch(err => {
+              console.warn("Mermaid execution error:", err);
+            });
+          }, 50);
+        });
+      } else {
+        import('mermaid').then((mermaidModule) => {
+          const mermaid = mermaidModule.default;
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: darkMode ? 'dark' : 'default',
+            securityLevel: 'loose',
+          });
+          setTimeout(() => {
+            mermaid.run({ querySelector: '.mermaid' }).catch(err => {
+              console.warn("Mermaid execution error:", err);
+            });
+          }, 50);
+        });
+      }
+    }
+  }, [readingHtml, darkMode, mermaidLoaded, markdown]);
+
+  // Syntax highlighting for regular code blocks
+  useEffect(() => {
+    const codeBlocks = document.querySelectorAll('.preview-prose pre code:not(.language-mermaid)');
+    codeBlocks.forEach((block) => {
+      if (!block.classList.contains('hljs')) {
+        hljs.highlightElement(block);
+      }
+    });
+  }, [readingHtml]);
 
   // --- Global Window Drag and Drop File Listeners ---
   useEffect(() => {
@@ -409,7 +653,6 @@ export default function App() {
 
     const handleDragEnter = (e) => {
       e.preventDefault();
-      // Only trigger if files are being dragged
       if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
         dragCounterRef.current++;
         setIsDragging(true);
@@ -427,43 +670,81 @@ export default function App() {
       }
     };
 
-    const handleDrop = (e) => {
+    const handleDrop = async (e) => {
       e.preventDefault();
       dragCounterRef.current = 0;
       setIsDragging(false);
 
-      const files = e.dataTransfer.files;
-      if (files && files.length > 0) {
-        const file = files[0];
-        const fileName = file.name;
-        const extension = fileName.substring(fileName.lastIndexOf('.')).toLowerCase();
+      const items = e.dataTransfer.items;
+      const newImageMap = { ...imageMapRef.current };
+      let mdContent = '';
+      let mdFileName = '';
+      let htmlContent = '';
+      let htmlFileName = '';
 
-        if (['.md', '.txt', '.html', '.htm'].includes(extension)) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            const content = event.target.result;
-            if (extension === '.html' || extension === '.htm') {
-              let parsedContent = content;
-              if (content.includes('<body') || content.includes('<BODY')) {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(content, 'text/html');
-                const markdownBody = doc.querySelector('.markdown-body');
-                if (markdownBody) {
-                  parsedContent = markdownBody.innerHTML;
-                } else if (doc.body) {
-                  parsedContent = doc.body.innerHTML;
-                }
-              }
-              handleHtmlChangeRef.current(parsedContent);
-              showToastRef.current(`📥 已成功讀取並同步 HTML 檔案: ${fileName}`, 'success');
-            } else {
-              handleMarkdownChangeRef.current(content);
-              showToastRef.current(`📥 已成功讀取並同步文字檔案: ${fileName}`, 'success');
-            }
+      const traverseFileTree = async (item, path = '') => {
+        if (item.isFile) {
+          const file = await new Promise((resolve) => item.file(resolve));
+          const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+          const relativePath = path + file.name;
+          
+          if (['.md', '.txt'].includes(ext)) {
+            mdContent = await file.text();
+            mdFileName = file.name;
+          } else if (['.html', '.htm'].includes(ext)) {
+            htmlContent = await file.text();
+            htmlFileName = file.name;
+          } else if (['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(ext)) {
+            const blobUrl = URL.createObjectURL(file);
+            newImageMap[relativePath] = blobUrl;
+            newImageMap[file.name] = blobUrl;
+          }
+        } else if (item.isDirectory) {
+          const dirReader = item.createReader();
+          const readEntries = () => {
+            return new Promise((resolve) => {
+              dirReader.readEntries(resolve);
+            });
           };
-          reader.readAsText(file);
-        } else {
-          showToastRef.current('⚠️ 僅支援拖放 .md, .txt, .html 格式的檔案！', 'error');
+          
+          let entries = await readEntries();
+          for (const entry of entries) {
+            await traverseFileTree(entry, path + item.name + '/');
+          }
+        }
+      };
+
+      if (items && items.length > 0) {
+        const promises = [];
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i].webkitGetAsEntry();
+          if (item) {
+            promises.push(traverseFileTree(item));
+          }
+        }
+        await Promise.all(promises);
+
+        setImageMap(newImageMap);
+
+        if (mdContent) {
+          handleMarkdownChangeRef.current(mdContent);
+          showToastRef.current(`📥 已成功讀取 Markdown 檔案: ${mdFileName}，並載入本機圖片！`, 'success');
+        } else if (htmlContent) {
+          let parsedContent = htmlContent;
+          if (htmlContent.includes('<body') || htmlContent.includes('<BODY')) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlContent, 'text/html');
+            const markdownBody = doc.querySelector('.markdown-body');
+            if (markdownBody) {
+              parsedContent = markdownBody.innerHTML;
+            } else if (doc.body) {
+              parsedContent = doc.body.innerHTML;
+            }
+          }
+          handleHtmlChangeRef.current(parsedContent);
+          showToastRef.current(`📥 已成功讀取 HTML 檔案: ${htmlFileName}，並載入本機圖片！`, 'success');
+        } else if (Object.keys(newImageMap).length > 0) {
+          showToastRef.current(`📥 已載入 ${Object.keys(newImageMap).length} 張本機圖片！`, 'success');
         }
       }
     };
@@ -507,9 +788,13 @@ export default function App() {
               const sharedVal = text || title || url;
               if (sharedVal) {
                 setMarkdown(sharedVal);
-                const parsedHTML = marked.parse(sharedVal);
-                setHtml(parsedHTML);
-                setReadingHtml(parsedHTML);
+                const { markdown: cleanMd, metadata, rawFrontMatter } = parseFrontMatter(sharedVal);
+                setFrontMatterRaw(rawFrontMatter);
+                const parsedHTML = marked.parse(cleanMd);
+                const sanitizedHTML = sanitizeHtml(parsedHTML);
+                const metadataHtml = renderMetadataCard(metadata);
+                setHtml(sanitizedHTML);
+                setReadingHtml(metadataHtml + sanitizedHTML);
                 setHistory([sharedVal]);
                 setHistoryIndex(0);
                 setLayout('single');
@@ -707,9 +992,15 @@ export default function App() {
       
       activePaneRef.current = 'history';
       setMarkdown(prevMD);
-      const parsedHTML = marked.parse(prevMD);
-      setHtml(parsedHTML);
-      setReadingHtml(parsedHTML);
+      
+      const { markdown: cleanMd, metadata, rawFrontMatter } = parseFrontMatter(prevMD);
+      setFrontMatterRaw(rawFrontMatter);
+      const parsedHTML = marked.parse(cleanMd);
+      const sanitizedHTML = sanitizeHtml(parsedHTML);
+      const metadataHtml = renderMetadataCard(metadata);
+      
+      setHtml(sanitizedHTML);
+      setReadingHtml(metadataHtml + sanitizedHTML);
     }
   };
 
@@ -721,9 +1012,15 @@ export default function App() {
 
       activePaneRef.current = 'history';
       setMarkdown(nextMD);
-      const parsedHTML = marked.parse(nextMD);
-      setHtml(parsedHTML);
-      setReadingHtml(parsedHTML);
+      
+      const { markdown: cleanMd, metadata, rawFrontMatter } = parseFrontMatter(nextMD);
+      setFrontMatterRaw(rawFrontMatter);
+      const parsedHTML = marked.parse(cleanMd);
+      const sanitizedHTML = sanitizeHtml(parsedHTML);
+      const metadataHtml = renderMetadataCard(metadata);
+      
+      setHtml(sanitizedHTML);
+      setReadingHtml(metadataHtml + sanitizedHTML);
     }
   };
 
@@ -735,9 +1032,16 @@ export default function App() {
     const oldHtml = html;
     setMarkdown(val);
     
-    const parsedHTML = marked.parse(val);
-    setHtml(parsedHTML);
-    setReadingHtml(parsedHTML);
+    const { markdown: cleanMd, metadata, rawFrontMatter } = parseFrontMatter(val);
+    setFrontMatterRaw(rawFrontMatter);
+    
+    const parsedHTML = marked.parse(cleanMd);
+    const sanitizedHTML = sanitizeHtml(parsedHTML);
+    const metadataHtml = renderMetadataCard(metadata);
+    const finalReadingHtml = metadataHtml + sanitizedHTML;
+    
+    setHtml(sanitizedHTML);
+    setReadingHtml(finalReadingHtml);
 
     if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current);
     historyTimeoutRef.current = setTimeout(() => {
@@ -750,7 +1054,6 @@ export default function App() {
         nativeEvent.inputType === 'insertFromPaste' ||
         nativeEvent.inputType === 'insertReplacementText'
       );
-      // Fallback check: if length changes significantly (e.g. > 15 chars) and it's not composition text
       const isLargeDiff = val.length - markdown.length > 15;
       const isComposition = nativeEvent && nativeEvent.inputType === 'insertCompositionText';
 
@@ -764,9 +1067,9 @@ export default function App() {
     // If the edit came from the right column, align the left column
     if (layout === 'double' && side === 'right') {
       if (leftPane === 'html') {
-        alignLeftPaneToRight('html', oldHtml, parsedHTML);
+        alignLeftPaneToRight('html', oldHtml, sanitizedHTML);
       } else if (leftPane === 'reading') {
-        alignLeftPaneToRight('reading', oldHtml, parsedHTML);
+        alignLeftPaneToRight('reading', oldHtml, finalReadingHtml);
       }
     }
   };
@@ -776,23 +1079,29 @@ export default function App() {
     activePaneRef.current = 'html';
     const oldMarkdown = markdown;
     const oldHtml = html;
-    setHtml(val);
-    setReadingHtml(val);
+    
+    const sanitizedHTML = sanitizeHtml(val);
+    setHtml(sanitizedHTML);
+    
+    const { metadata } = parseFrontMatter(markdown);
+    const metadataHtml = renderMetadataCard(metadata);
+    setReadingHtml(metadataHtml + sanitizedHTML);
 
-    const convertedMD = turndownService.turndown(val);
-    setMarkdown(convertedMD);
+    const convertedMD = turndownService.turndown(sanitizedHTML);
+    const finalMD = frontMatterRaw + convertedMD;
+    setMarkdown(finalMD);
 
     if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current);
     historyTimeoutRef.current = setTimeout(() => {
-      pushToHistory(convertedMD);
+      pushToHistory(finalMD);
     }, 400);
 
     // If the edit came from the right column, align the left column
     if (layout === 'double' && side === 'right') {
       if (leftPane === 'markdown') {
-        alignLeftPaneToRight('markdown', oldMarkdown, convertedMD);
+        alignLeftPaneToRight('markdown', oldMarkdown, finalMD);
       } else if (leftPane === 'reading') {
-        alignLeftPaneToRight('reading', oldHtml, val);
+        alignLeftPaneToRight('reading', oldHtml, sanitizedHTML);
       }
     }
   };
@@ -816,18 +1125,30 @@ export default function App() {
     const oldMarkdown = markdown;
     const oldHtml = html;
     
-    setHtml(innerHTML);
-    const convertedMD = turndownService.turndown(innerHTML);
-    setMarkdown(convertedMD);
-    setReadingHtml(innerHTML);
-    pushToHistory(convertedMD);
+    const sanitizedHTML = sanitizeHtml(innerHTML);
+    
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(sanitizedHTML, 'text/html');
+    const metaCard = doc.querySelector('.metadata-card-wrapper');
+    if (metaCard) {
+      metaCard.remove();
+    }
+    const cleanBodyHtml = doc.body.innerHTML;
+    
+    setHtml(cleanBodyHtml);
+    setReadingHtml(sanitizedHTML);
+    
+    const convertedMD = turndownService.turndown(cleanBodyHtml);
+    const finalMD = frontMatterRaw + convertedMD;
+    setMarkdown(finalMD);
+    pushToHistory(finalMD);
 
     // If the edit came from the right column, align the left column
     if (layout === 'double' && side === 'right') {
       if (leftPane === 'markdown') {
-        alignLeftPaneToRight('markdown', oldMarkdown, convertedMD);
+        alignLeftPaneToRight('markdown', oldMarkdown, finalMD);
       } else if (leftPane === 'html') {
-        alignLeftPaneToRight('html', oldHtml, innerHTML);
+        alignLeftPaneToRight('html', oldHtml, cleanBodyHtml);
       }
     }
   };
@@ -873,10 +1194,15 @@ export default function App() {
       } else if (type === 'html') {
         handleHtmlChange(text);
       } else if (type === 'reading') {
-        const parsedHTML = marked.parse(text);
-        setHtml(parsedHTML);
+        const { markdown: cleanMd, metadata, rawFrontMatter } = parseFrontMatter(text);
+        setFrontMatterRaw(rawFrontMatter);
+        const parsedHTML = marked.parse(cleanMd);
+        const sanitizedHTML = sanitizeHtml(parsedHTML);
+        const metadataHtml = renderMetadataCard(metadata);
+        
+        setHtml(sanitizedHTML);
         setMarkdown(text);
-        setReadingHtml(parsedHTML);
+        setReadingHtml(metadataHtml + sanitizedHTML);
         pushToHistory(text);
       }
     } catch (err) {
@@ -1218,6 +1544,7 @@ export default function App() {
     showToast('⏳ 正在產生 HTML 文件，請稍候...', 'info');
     try {
       const { articleContentHtml, exportedHeadings } = generateExportHTML();
+      const hasMermaidInExport = markdown.includes('```mermaid');
       
       let tocHtml = '';
       if (exportedHeadings.length === 0) {
@@ -2154,6 +2481,43 @@ export default function App() {
 
     updateActiveHeading();
   </script>
+  ${hasMermaidInExport ? `
+  <!-- Mermaid -->
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.getAttribute('data-theme') === 'dark' ? 'dark' : 'default',
+      securityLevel: 'loose'
+    });
+    
+    // Observer to update theme dynamically
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'data-theme') {
+          const currentTheme = document.body.getAttribute('data-theme');
+          mermaid.initialize({
+            theme: currentTheme === 'dark' ? 'dark' : 'default'
+          });
+          
+          const wrappers = document.querySelectorAll('.mermaid-wrapper');
+          wrappers.forEach(el => {
+            const encoded = el.getAttribute('data-mermaid-code') || '';
+            let rawCode = '';
+            try {
+              rawCode = decodeURIComponent(escape(window.atob(encoded)));
+            } catch (e) {
+              rawCode = '';
+            }
+            el.innerHTML = '<div class="mermaid">' + rawCode + '</div>';
+          });
+          mermaid.run({ querySelector: '.mermaid' });
+        }
+      });
+    });
+    observer.observe(document.body, { attributes: true });
+  </script>
+  ` : ''}
 </body>
 </html>`;
       
@@ -2801,7 +3165,7 @@ export default function App() {
             suppressContentEditableWarning
             style={{ fontSize: `${previewFontSize}px` }}
             className={`flex-1 preview-prose focus:outline-none min-h-[300px] pb-12 ${isReadingEditable ? 'ring-2 ring-indigo-500/20 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-900/50 border border-indigo-200/30 dark:border-indigo-900/20' : ''}`}
-            dangerouslySetInnerHTML={{ __html: readingHtml }}
+            dangerouslySetInnerHTML={{ __html: resolveImageSources(readingHtml, imageMap) }}
             data-placeholder="無內容。在此處雙擊或輸入文字，或在左邊編寫 Markdown..."
           />
         </div>
@@ -2984,6 +3348,24 @@ export default function App() {
               className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500/30 accent-indigo-500 cursor-pointer"
             />
             <span>貼上後跳轉</span>
+          </label>
+        )}
+
+        {/* Load Local Images button (only visible for markdown editor in single/left columns) */}
+        {isMd && (uniqueKey === 'left-pane-util' || uniqueKey === 'single-pane-util') && (
+          <label className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-950 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded-lg cursor-pointer transition-all select-none">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375 0 11-.75 0 .375 0 01.75 0z" />
+            </svg>
+            <span>載入本機圖片</span>
+            <input
+              type="file"
+              webkitdirectory=""
+              directory=""
+              multiple
+              onChange={handleLoadLocalImages}
+              className="hidden"
+            />
           </label>
         )}
 
@@ -3664,7 +4046,7 @@ export default function App() {
         >
           <div 
             className="preview-prose"
-            dangerouslySetInnerHTML={{ __html: readingHtml }} 
+            dangerouslySetInnerHTML={{ __html: resolveImageSources(readingHtml, imageMap) }} 
           />
         </div>
       </div>
