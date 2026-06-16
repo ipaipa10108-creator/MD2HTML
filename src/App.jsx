@@ -106,7 +106,7 @@ marked.use({
       const language = lang || '';
       if (language === 'mermaid') {
         const encodedContent = window.btoa(unescape(encodeURIComponent(text)));
-        return `<div class="mermaid-wrapper" data-mermaid-code="${encodedContent}">
+        return `<div class="mermaid-wrapper" contenteditable="false" data-mermaid-code="${encodedContent}">
           <pre class="mermaid">${text}</pre>
         </div>`;
       }
@@ -453,6 +453,30 @@ export default function App() {
 
   const [showToolbars, setShowToolbars] = useState(true); // Auto hide/show toolbars on mobile scroll/tap
 
+  // --- Mermaid Custom Background State ---
+  const [mermaidBg, setMermaidBg] = useState(() => {
+    const saved = localStorage.getItem('mermaid-bg');
+    return saved || 'dark';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('mermaid-bg', mermaidBg);
+  }, [mermaidBg]);
+
+  const getMermaidBgColor = () => {
+    if (mermaidBg === 'dark') return '#0f172a';
+    if (mermaidBg === 'light') return '#f8fafc';
+    if (mermaidBg === 'white') return '#ffffff';
+    if (mermaidBg === 'transparent') return 'transparent';
+    return '#0f172a';
+  };
+
+  const getMermaidTheme = () => {
+    if (mermaidBg === 'dark') return 'dark';
+    if (mermaidBg === 'light' || mermaidBg === 'white') return 'default';
+    return darkMode ? 'dark' : 'default';
+  };
+
   // --- Double Click Editable State ---
   const [isReadingEditable, setIsReadingEditable] = useState(false);
 
@@ -603,15 +627,30 @@ export default function App() {
     const containsMermaid = markdown.includes('```mermaid');
     if (containsMermaid) {
       const timer = setTimeout(() => {
+        const resetMermaidWrappers = () => {
+          const wrappers = document.querySelectorAll('.mermaid-wrapper');
+          wrappers.forEach(el => {
+            const encoded = el.getAttribute('data-mermaid-code') || '';
+            let rawCode = '';
+            try {
+              rawCode = decodeURIComponent(escape(window.atob(encoded)));
+            } catch (e) {
+              rawCode = '';
+            }
+            el.innerHTML = `<pre class="mermaid">${rawCode}</pre>`;
+          });
+        };
+
         if (!mermaidLoaded) {
           import('mermaid').then((mermaidModule) => {
             const mermaid = mermaidModule.default;
             mermaid.initialize({
               startOnLoad: false,
-              theme: darkMode ? 'dark' : 'default',
+              theme: getMermaidTheme(),
               securityLevel: 'loose',
             });
             setMermaidLoaded(true);
+            resetMermaidWrappers();
             mermaid.run({ querySelector: 'pre.mermaid, div.mermaid' }).catch(err => {
               console.warn("Mermaid execution error:", err);
             });
@@ -621,9 +660,10 @@ export default function App() {
             const mermaid = mermaidModule.default;
             mermaid.initialize({
               startOnLoad: false,
-              theme: darkMode ? 'dark' : 'default',
+              theme: getMermaidTheme(),
               securityLevel: 'loose',
             });
+            resetMermaidWrappers();
             mermaid.run({ querySelector: 'pre.mermaid, div.mermaid' }).catch(err => {
               console.warn("Mermaid execution error:", err);
             });
@@ -633,7 +673,7 @@ export default function App() {
       
       return () => clearTimeout(timer);
     }
-  }, [readingHtml, darkMode, mermaidLoaded, markdown]);
+  }, [readingHtml, darkMode, mermaidLoaded, markdown, mermaidBg]);
 
   // Syntax highlighting for regular code blocks
   useEffect(() => {
@@ -1913,6 +1953,31 @@ export default function App() {
       overflow-x: auto;
     }
     
+    .mermaid-wrapper {
+      background-color: ${getMermaidBgColor()};
+      border: 1px solid ${mermaidBg === 'transparent' ? 'transparent' : 'var(--border)'};
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: background-color 0.3s;
+      overflow-x: auto;
+      min-width: 100%;
+    }
+    
+    .markdown-body pre.mermaid {
+      background-color: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+    
     .markdown-body table {
       width: 100%;
       border-collapse: collapse;
@@ -2485,9 +2550,16 @@ export default function App() {
   <!-- Mermaid -->
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    const mermaidBg = "${mermaidBg}";
+    const getMermaidTheme = (theme) => {
+      if (mermaidBg === 'dark') return 'dark';
+      if (mermaidBg === 'light' || mermaidBg === 'white') return 'default';
+      return theme === 'dark' ? 'dark' : 'default';
+    };
+
     mermaid.initialize({
       startOnLoad: true,
-      theme: document.body.getAttribute('data-theme') === 'dark' ? 'dark' : 'default',
+      theme: getMermaidTheme(document.body.getAttribute('data-theme')),
       securityLevel: 'loose'
     });
     
@@ -2497,7 +2569,7 @@ export default function App() {
         if (mutation.attributeName === 'data-theme') {
           const currentTheme = document.body.getAttribute('data-theme');
           mermaid.initialize({
-            theme: currentTheme === 'dark' ? 'dark' : 'default'
+            theme: getMermaidTheme(currentTheme)
           });
           
           const wrappers = document.querySelectorAll('.mermaid-wrapper');
@@ -2951,6 +3023,23 @@ export default function App() {
           </select>
         )}
 
+        {/* Mermaid Background Customizer */}
+        {markdown.includes('```mermaid') && (
+          <div className="flex items-center rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700 gap-1 select-none text-[10px] font-bold text-slate-500 dark:text-slate-400">
+            <span className="pl-1.5 pr-0.5 text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap">Mermaid 底圖:</span>
+            <select
+              value={mermaidBg}
+              onChange={(e) => setMermaidBg(e.target.value)}
+              className="bg-transparent border-0 py-0.5 pl-0.5 pr-4 text-[10px] font-bold text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-0 cursor-pointer select-none"
+            >
+              <option value="dark" className="bg-white dark:bg-slate-900">深色</option>
+              <option value="light" className="bg-white dark:bg-slate-900">淺色</option>
+              <option value="white" className="bg-white dark:bg-slate-900">純白</option>
+              <option value="transparent" className="bg-white dark:bg-slate-900">透明</option>
+            </select>
+          </div>
+        )}
+
 
 
         {/* Mobile PDF Dropdown Button */}
@@ -3163,7 +3252,11 @@ export default function App() {
             onBlur={(e) => handleReadingBlur(e, side)}
             onDoubleClick={() => handleReadingDoubleClick(side)}
             suppressContentEditableWarning
-            style={{ fontSize: `${previewFontSize}px` }}
+            style={{ 
+              fontSize: `${previewFontSize}px`,
+              '--mermaid-bg': getMermaidBgColor(),
+              '--mermaid-border': mermaidBg === 'transparent' ? 'transparent' : (darkMode ? 'rgba(51, 65, 85, 0.5)' : 'rgba(226, 232, 240, 0.8)')
+            }}
             className={`flex-1 preview-prose focus:outline-none min-h-[300px] pb-12 ${isReadingEditable ? 'ring-2 ring-indigo-500/20 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-900/50 border border-indigo-200/30 dark:border-indigo-900/20' : ''}`}
             dangerouslySetInnerHTML={{ __html: resolveImageSources(readingHtml, imageMap) }}
             data-placeholder="無內容。在此處雙擊或輸入文字，或在左邊編寫 Markdown..."
