@@ -72,7 +72,7 @@ marked.setOptions({
 
 marked.use({
   renderer: {
-    code({ text, lang, escaped }) {
+    code({ text, lang }) {
       const language = lang || '';
       return `<div class="code-block-wrapper">
   <button class="copy-code-btn" aria-label="Copy code" title="複製此程式碼">
@@ -266,6 +266,10 @@ export default function App() {
   const [html, setHtml] = useState(() => defaultHtml);
   const [readingHtml, setReadingHtml] = useState(() => defaultHtml);
 
+  // --- Drag and Drop File State ---
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
+
   // --- Layout State ---
   const [layout, setLayout] = useState('single'); // default changed to 'single'
   const [previewFontSize, setPreviewFontSize] = useState(15); // default base font size is 15px
@@ -386,6 +390,96 @@ export default function App() {
       setToast(prev => ({ ...prev, show: false }));
     }, 4500);
   };
+
+  const handleMarkdownChangeRef = useRef(handleMarkdownChange);
+  const handleHtmlChangeRef = useRef(handleHtmlChange);
+  const showToastRef = useRef(showToast);
+
+  useEffect(() => {
+    handleMarkdownChangeRef.current = handleMarkdownChange;
+    handleHtmlChangeRef.current = handleHtmlChange;
+    showToastRef.current = showToast;
+  });
+
+  // --- Global Window Drag and Drop File Listeners ---
+  useEffect(() => {
+    const handleDragOver = (e) => {
+      e.preventDefault();
+    };
+
+    const handleDragEnter = (e) => {
+      e.preventDefault();
+      // Only trigger if files are being dragged
+      if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+        dragCounterRef.current++;
+        setIsDragging(true);
+      }
+    };
+
+    const handleDragLeave = (e) => {
+      e.preventDefault();
+      if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+        dragCounterRef.current--;
+        if (dragCounterRef.current <= 0) {
+          dragCounterRef.current = 0;
+          setIsDragging(false);
+        }
+      }
+    };
+
+    const handleDrop = (e) => {
+      e.preventDefault();
+      dragCounterRef.current = 0;
+      setIsDragging(false);
+
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        const file = files[0];
+        const fileName = file.name;
+        const extension = fileName.substring(fileName.lastIndexOf('.')).toLowerCase();
+
+        if (['.md', '.txt', '.html', '.htm'].includes(extension)) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const content = event.target.result;
+            if (extension === '.html' || extension === '.htm') {
+              let parsedContent = content;
+              if (content.includes('<body') || content.includes('<BODY')) {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(content, 'text/html');
+                const markdownBody = doc.querySelector('.markdown-body');
+                if (markdownBody) {
+                  parsedContent = markdownBody.innerHTML;
+                } else if (doc.body) {
+                  parsedContent = doc.body.innerHTML;
+                }
+              }
+              handleHtmlChangeRef.current(parsedContent);
+              showToastRef.current(`📥 已成功讀取並同步 HTML 檔案: ${fileName}`, 'success');
+            } else {
+              handleMarkdownChangeRef.current(content);
+              showToastRef.current(`📥 已成功讀取並同步文字檔案: ${fileName}`, 'success');
+            }
+          };
+          reader.readAsText(file);
+        } else {
+          showToastRef.current('⚠️ 僅支援拖放 .md, .txt, .html 格式的檔案！', 'error');
+        }
+      }
+    };
+
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('dragenter', handleDragEnter);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('drop', handleDrop);
+
+    return () => {
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('dragenter', handleDragEnter);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, []);
 
   // Handle shared content from Android Web Share Target API on Mount
   useEffect(() => {
@@ -3576,6 +3670,28 @@ export default function App() {
       </div>
 
       {renderToast()}
+
+      {/* --- DRAG AND DROP FILE IMPORT OVERLAY --- */}
+      {isDragging && (
+        <div className="fixed inset-0 z-[110] flex flex-col items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md transition-all duration-300 animate-fade-in pointer-events-none">
+          <div className="w-full max-w-lg p-12 rounded-3xl border-2 border-dashed border-indigo-400 bg-white/90 dark:bg-slate-900/90 shadow-2xl flex flex-col items-center justify-center text-center gap-6 animate-pulse">
+            {/* Upload/Drop Icon */}
+            <div className="w-20 h-20 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-500/10">
+              <svg className="w-10 h-10 animate-bounce text-indigo-500 dark:text-indigo-400" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-xl font-extrabold text-slate-800 dark:text-slate-100 font-heading bg-gradient-to-r from-indigo-500 to-purple-650 bg-clip-text text-transparent">
+                放開滑鼠以讀取檔案
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                支援自動讀取並同步 <strong className="text-indigo-500 dark:text-indigo-400 font-bold">.md</strong>、<strong className="text-indigo-500 dark:text-indigo-400 font-bold">.txt</strong> 或 <strong className="text-indigo-500 dark:text-indigo-400 font-bold">.html</strong> 格式的檔案
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
