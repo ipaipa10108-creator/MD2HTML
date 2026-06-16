@@ -216,3 +216,81 @@
 .animate-change-highlight {
   animation: changeHighlight 2s ease-out;
 }
+
+/* Code block wrapper and copy button styling */
+.code-block-wrapper {
+  position: relative;
+  margin-top: 1em;
+  margin-bottom: 1.5em;
+}
+
+/* Make sure pre inside wrapper doesn't have duplicate margin */
+.preview-prose .code-block-wrapper pre {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.copy-code-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background-color: rgba(30, 41, 59, 0.7);
+  color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background-color 0.2s, color 0.2s, transform 0.1s;
+  z-index: 10;
+}
+
+.copy-code-btn:hover {
+  background-color: rgba(30, 41, 59, 0.95);
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.copy-code-btn:active {
+  transform: scale(0.95);
+}
+
+/* Show copy button on hover of the wrapper */
+.code-block-wrapper:hover .copy-code-btn {
+  opacity: 1;
+}
+
+/* On mobile/touch devices, show by default with slightly lower opacity */
+@media (max-width: 1024px) {
+  .copy-code-btn {
+    opacity: 0.85;
+  }
+}
+
+.copy-code-btn.copied {
+  background-color: #10b981 !important;
+  color: #ffffff !important;
+  border-color: #10b981 !important;
+}
+
+.copy-code-btn .check-icon {
+  display: none;
+}
+
+.copy-code-btn.copied .copy-icon {
+  display: none;
+}
+
+.copy-code-btn.copied .check-icon {
+  display: block;
+}
+
+/* Hide copy buttons when in editing mode */
+[contenteditable="true"] .copy-code-btn {
+  display: none !important;
+}
+

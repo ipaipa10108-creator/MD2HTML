@@ -12,6 +12,11 @@ const turndownService = new TurndownService({
   codeBlockStyle: 'fenced'
 });
 
+// Remove copy code buttons when converting back to Markdown
+turndownService.remove(function (node) {
+  return node.nodeName === 'BUTTON' && node.classList.contains('copy-code-btn');
+});
+
 // Custom rule for parsing table back into Markdown GFM tables
 turndownService.addRule('table', {
   filter: 'table',
@@ -63,6 +68,26 @@ turndownService.addRule('fencedCodeBlock', {
 marked.setOptions({
   gfm: true,
   breaks: true,
+});
+
+marked.use({
+  renderer: {
+    code({ text, lang, escaped }) {
+      const language = lang || '';
+      return `<div class="code-block-wrapper">
+  <button class="copy-code-btn" aria-label="Copy code" title="複製此程式碼">
+    <svg class="copy-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+    </svg>
+    <svg class="check-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+      <polyline points="20 6 9 17 4 12"></polyline>
+    </svg>
+  </button>
+  <pre><code class="language-${language}">${text}</code></pre>
+</div>`;
+    }
+  }
 });
 
 const initialMarkdown = `# 🚀 萬能 Markdown 編輯轉換器
@@ -448,11 +473,37 @@ export default function App() {
     lastScrollY.current = scrollTop;
   };
 
-  const handleContentClick = () => {
+  const handleContentClick = (e) => {
     // Single tap on content to show toolbars on mobile if they are hidden
     if (window.innerWidth < 768) {
       if (!showToolbars) {
         setShowToolbars(true);
+      }
+    }
+
+    // Handle copying code blocks when the copy button is clicked
+    if (e && e.target) {
+      const copyBtn = e.target.closest('.copy-code-btn');
+      if (copyBtn) {
+        e.stopPropagation();
+        e.preventDefault();
+        
+        const wrapper = copyBtn.closest('.code-block-wrapper');
+        const pre = wrapper ? wrapper.querySelector('pre') : null;
+        if (pre) {
+          const codeText = pre.textContent || '';
+          navigator.clipboard.writeText(codeText)
+            .then(() => {
+              copyBtn.classList.add('copied');
+              setTimeout(() => {
+                copyBtn.classList.remove('copied');
+              }, 2000);
+            })
+            .catch(err => {
+              console.error('Failed to copy code block content:', err);
+              showToast('複製失敗，請手動複製', 'error');
+            });
+        }
       }
     }
   };
@@ -1709,6 +1760,73 @@ export default function App() {
         transform: translateY(-50%) rotate(0deg);
       }
     }
+
+    /* Code block copy buttons styling */
+    .code-block-wrapper {
+      position: relative;
+      margin: 1.5rem 0;
+    }
+    
+    .markdown-body .code-block-wrapper pre {
+      margin: 0;
+    }
+    
+    .copy-code-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background-color: rgba(30, 41, 59, 0.7);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s, background-color 0.2s, color 0.2s, transform 0.1s;
+      z-index: 10;
+    }
+    
+    .copy-code-btn:hover {
+      background-color: rgba(30, 41, 59, 0.95);
+      color: #f8fafc;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    .copy-code-btn:active {
+      transform: scale(0.95);
+    }
+    
+    .code-block-wrapper:hover .copy-code-btn {
+      opacity: 1;
+    }
+    
+    @media (max-width: 1024px) {
+      .copy-code-btn {
+        opacity: 0.85;
+      }
+    }
+    
+    .copy-code-btn.copied {
+      background-color: #10b981 !important;
+      color: #ffffff !important;
+      border-color: #10b981 !important;
+    }
+    
+    .copy-code-btn .check-icon {
+      display: none;
+    }
+    
+    .copy-code-btn.copied .copy-icon {
+      display: none;
+    }
+    
+    .copy-code-btn.copied .check-icon {
+      display: block;
+    }
   </style>
 </head>
 <body class="${bodyClass}" data-theme="light">
@@ -1781,6 +1899,28 @@ export default function App() {
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script>
     hljs.highlightAll();
+
+    // --- Copy Code Blocks ---
+    document.addEventListener('click', function(e) {
+      var btn = e.target.closest('.copy-code-btn');
+      if (btn) {
+        e.stopPropagation();
+        e.preventDefault();
+        var wrapper = btn.closest('.code-block-wrapper');
+        var pre = wrapper ? wrapper.querySelector('pre') : null;
+        if (pre) {
+          var text = pre.textContent || '';
+          navigator.clipboard.writeText(text).then(function() {
+            btn.classList.add('copied');
+            setTimeout(function() {
+              btn.classList.remove('copied');
+            }, 2000);
+          }).catch(function(err) {
+            console.error('Failed to copy code:', err);
+          });
+        }
+      }
+    });
 
     // --- Theme ---
     function applyTheme(theme) {
