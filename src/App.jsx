@@ -107,7 +107,7 @@ marked.use({
       if (language === 'mermaid') {
         const encodedContent = window.btoa(unescape(encodeURIComponent(text)));
         return `<div class="mermaid-wrapper" data-mermaid-code="${encodedContent}">
-          <div class="mermaid">${text}</div>
+          <pre class="mermaid">${text}</pre>
         </div>`;
       }
       return `<div class="code-block-wrapper">
@@ -602,36 +602,36 @@ export default function App() {
   useEffect(() => {
     const containsMermaid = markdown.includes('```mermaid');
     if (containsMermaid) {
-      if (!mermaidLoaded) {
-        import('mermaid').then((mermaidModule) => {
-          const mermaid = mermaidModule.default;
-          mermaid.initialize({
-            startOnLoad: false,
-            theme: darkMode ? 'dark' : 'default',
-            securityLevel: 'loose',
-          });
-          setMermaidLoaded(true);
-          setTimeout(() => {
-            mermaid.run({ querySelector: '.mermaid' }).catch(err => {
+      const timer = setTimeout(() => {
+        if (!mermaidLoaded) {
+          import('mermaid').then((mermaidModule) => {
+            const mermaid = mermaidModule.default;
+            mermaid.initialize({
+              startOnLoad: false,
+              theme: darkMode ? 'dark' : 'default',
+              securityLevel: 'loose',
+            });
+            setMermaidLoaded(true);
+            mermaid.run({ querySelector: 'pre.mermaid, div.mermaid' }).catch(err => {
               console.warn("Mermaid execution error:", err);
             });
-          }, 50);
-        });
-      } else {
-        import('mermaid').then((mermaidModule) => {
-          const mermaid = mermaidModule.default;
-          mermaid.initialize({
-            startOnLoad: false,
-            theme: darkMode ? 'dark' : 'default',
-            securityLevel: 'loose',
           });
-          setTimeout(() => {
-            mermaid.run({ querySelector: '.mermaid' }).catch(err => {
+        } else {
+          import('mermaid').then((mermaidModule) => {
+            const mermaid = mermaidModule.default;
+            mermaid.initialize({
+              startOnLoad: false,
+              theme: darkMode ? 'dark' : 'default',
+              securityLevel: 'loose',
+            });
+            mermaid.run({ querySelector: 'pre.mermaid, div.mermaid' }).catch(err => {
               console.warn("Mermaid execution error:", err);
             });
-          }, 50);
-        });
-      }
+          });
+        }
+      }, 300); // 300ms debounce to avoid race conditions during fast typing
+      
+      return () => clearTimeout(timer);
     }
   }, [readingHtml, darkMode, mermaidLoaded, markdown]);
 
@@ -2509,9 +2509,9 @@ export default function App() {
             } catch (e) {
               rawCode = '';
             }
-            el.innerHTML = '<div class="mermaid">' + rawCode + '</div>';
+            el.innerHTML = '<pre class="mermaid">' + rawCode + '</pre>';
           });
-          mermaid.run({ querySelector: '.mermaid' });
+          mermaid.run({ querySelector: 'pre.mermaid, div.mermaid' });
         }
       });
     });
