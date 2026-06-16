@@ -1027,7 +1027,7 @@ export default function App() {
   // --- Three-way Synchronization Handlers ---
 
   // 1. Triggered by typing in Markdown Textarea
-  const handleMarkdownChange = (val, side, nativeEvent) => {
+  function handleMarkdownChange(val, side, nativeEvent) {
     activePaneRef.current = 'markdown';
     const oldHtml = html;
     setMarkdown(val);
@@ -1072,10 +1072,10 @@ export default function App() {
         alignLeftPaneToRight('reading', oldHtml, finalReadingHtml);
       }
     }
-  };
+  }
 
   // 2. Triggered by typing in HTML Textarea
-  const handleHtmlChange = (val, side) => {
+  function handleHtmlChange(val, side) {
     activePaneRef.current = 'html';
     const oldMarkdown = markdown;
     const oldHtml = html;
@@ -1104,7 +1104,7 @@ export default function App() {
         alignLeftPaneToRight('reading', oldHtml, sanitizedHTML);
       }
     }
-  };
+  }
 
   // Double click event on Reading View
   const handleReadingDoubleClick = (side) => {
