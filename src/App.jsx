@@ -665,7 +665,7 @@ export default function App() {
     showToast(`📁 已成功載入 ${files.length} 張本機圖片以解析相對路徑！`, 'success');
   };
 
-  const [mermaidLoaded, setMermaidLoaded] = useState(false);
+  const mermaidRef = useRef(null);
 
   // Lazy-load Mermaid only when necessary
   useEffect(() => {
@@ -686,39 +686,32 @@ export default function App() {
           });
         };
 
-        if (!mermaidLoaded) {
+        const renderDiagrams = (mermaid) => {
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: getMermaidTheme(),
+            securityLevel: 'loose',
+          });
+          resetMermaidWrappers();
+          mermaid.run({ querySelector: 'pre.mermaid, div.mermaid' }).catch(err => {
+            console.warn("Mermaid execution error:", err);
+          });
+        };
+
+        if (!mermaidRef.current) {
           import('mermaid').then((mermaidModule) => {
             const mermaid = mermaidModule.default;
-            mermaid.initialize({
-              startOnLoad: false,
-              theme: getMermaidTheme(),
-              securityLevel: 'loose',
-            });
-            setMermaidLoaded(true);
-            resetMermaidWrappers();
-            mermaid.run({ querySelector: 'pre.mermaid, div.mermaid' }).catch(err => {
-              console.warn("Mermaid execution error:", err);
-            });
+            mermaidRef.current = mermaid;
+            renderDiagrams(mermaid);
           });
         } else {
-          import('mermaid').then((mermaidModule) => {
-            const mermaid = mermaidModule.default;
-            mermaid.initialize({
-              startOnLoad: false,
-              theme: getMermaidTheme(),
-              securityLevel: 'loose',
-            });
-            resetMermaidWrappers();
-            mermaid.run({ querySelector: 'pre.mermaid, div.mermaid' }).catch(err => {
-              console.warn("Mermaid execution error:", err);
-            });
-          });
+          renderDiagrams(mermaidRef.current);
         }
       }, 300); // 300ms debounce to avoid race conditions during fast typing
       
       return () => clearTimeout(timer);
     }
-  }, [readingHtml, darkMode, mermaidLoaded, markdown, mermaidBg]);
+  }, [readingHtml, darkMode, markdown, mermaidBg]);
 
   // Syntax highlighting for regular code blocks
   useEffect(() => {
