@@ -711,7 +711,7 @@ export default function App() {
       
       return () => clearTimeout(timer);
     }
-  }, [readingHtml, darkMode, markdown, mermaidBg]);
+  }, [readingHtml, darkMode, markdown, mermaidBg, layout, singlePane, leftPane, rightPane]);
 
   // Syntax highlighting for regular code blocks
   useEffect(() => {
@@ -721,7 +721,7 @@ export default function App() {
         hljs.highlightElement(block);
       }
     });
-  }, [readingHtml]);
+  }, [readingHtml, layout, singlePane, leftPane, rightPane]);
 
   // --- Global Window Drag and Drop File Listeners ---
   useEffect(() => {
