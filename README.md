@@ -59,6 +59,57 @@
 9. **毛玻璃風格確認對話框**
    - 全客製毛玻璃視覺 Modal，取代瀏覽器原生 `window.confirm`，用於清除內容、確認檔名等關鍵操作。
 
+10. **GFM 擴充語法支援**
+    - 完整支援 **GitHub Flavored Markdown (GFM)**，包括表格、任務清單與 ~~刪除線~~ 等語法。
+
+11. **程式碼語法高亮**
+    - 整合 `highlight.js`，自動為各類程式碼區塊提供高品質語法著色與一鍵複製功能。
+
+12. **Mermaid 流程圖與延遲載入**
+    - 支援標準 Mermaid 流程圖與圖表語法，且具備延遲載入優化——僅在文件確實包含 ` ```mermaid ` 時載入對應模組，純文字文件零效能負擔。
+
+13. **YAML Front Matter 元資料卡片**
+    - 支援解析文件最開頭的 `---` 包裹區塊，並將其渲染為結構化的精美 metadata 卡片（含標題、描述、日期、標籤與 Draft 草稿狀態）。
+
+---
+
+### 📊 範例展示
+
+#### 1. YAML Front Matter 元資料卡片範例
+在文件最開頭加入以下格式，系統會自動將其渲染為精美的卡片：
+```yaml
+---
+title: "萬能 Markdown 編輯轉換器"
+description: "一個極致美觀、高效的三向即時同步 Markdown 編輯器，支援 GFM、Mermaid、YAML Front Matter 等強大功能。"
+date: "2026-06-17"
+tags: [Markdown, WebApp, Productivity, Mermaid]
+draft: false
+---
+```
+
+#### 2. Mermaid 流程圖範例
+```mermaid
+flowchart TD
+    A[Markdown 編輯區] <--> B(HTML 原始碼區)
+    A <--> C(美化閱讀排版區)
+    B <--> C
+    C -->|雙擊啟用| D[contentEditable 視覺編輯]
+    D -->|自動同步| A
+    
+    style A fill:#e0e7ff,stroke:#6366f1,stroke-width:2px;
+    style B fill:#f1f5f9,stroke:#64748b,stroke-width:2px;
+    style C fill:#ecfdf5,stroke:#10b981,stroke-width:2px;
+    style D fill:#fef3c7,stroke:#d97706,stroke-width:2px;
+```
+
+#### 3. GFM 任務清單與刪除線範例
+```markdown
+* [x] 支援 GFM 表格渲染與 ~~舊版語法~~
+* [x] 支援 highlight.js 程式碼著色
+* [x] 支援 Mermaid 流程圖載入與渲染
+* [ ] 支援更多客製化 Markdown 解析選項
+```
+
 ---
 
 ### 📦 安裝與本地開發
@@ -151,6 +202,57 @@ Welcome to the **Universal Markdown Editor Converter**! A visually stunning, hig
 
 9. **Custom Frosted-Glass Dialogs**
    - Premium glassmorphic modals replace native `window.confirm` for clear, delete, and filename confirmation actions.
+
+10. **GFM Extended Syntax Support**
+    - Fully supports **GitHub Flavored Markdown (GFM)**, including tables, task lists, and ~~strikethrough~~.
+
+11. **Code Syntax Highlighting**
+    - Integrates `highlight.js` to automatically provide high-quality syntax highlighting and a copy-to-clipboard button for various code blocks.
+
+12. **Mermaid Diagrams & Lazy Loading**
+    - Supports standard Mermaid diagram syntax with lazy-loading optimization—Mermaid modules are loaded only when the document contains a ` ```mermaid ` block, meaning zero overhead for plain text files.
+
+13. **YAML Front Matter Metadata Cards**
+    - Parses YAML front matter (the starting `---` block) and renders it as an elegant, structured metadata card (displaying title, description, date, tags, and a Draft status badge).
+
+---
+
+### 📊 Feature Showcases
+
+#### 1. YAML Front Matter Example
+Add the following format at the very beginning of your document, and the system will render a beautiful metadata card:
+```yaml
+---
+title: "Universal Markdown Editor Converter"
+description: "A visually stunning, highly efficient three-way live sync Markdown editor supporting GFM, Mermaid, YAML Front Matter, and more."
+date: "2026-06-17"
+tags: [Markdown, WebApp, Productivity, Mermaid]
+draft: false
+---
+```
+
+#### 2. Mermaid Diagram Example
+```mermaid
+flowchart TD
+    A[Markdown Editor] <--> B(HTML Source Pane)
+    A <--> C(Reading Layout Pane)
+    B <--> C
+    C -->|Double Click| D[contentEditable Direct Edit]
+    D -->|Auto Sync| A
+    
+    style A fill:#e0e7ff,stroke:#6366f1,stroke-width:2px;
+    style B fill:#f1f5f9,stroke:#64748b,stroke-width:2px;
+    style C fill:#ecfdf5,stroke:#10b981,stroke-width:2px;
+    style D fill:#fef3c7,stroke:#d97706,stroke-width:2px;
+```
+
+#### 3. GFM Task List & Strikethrough Example
+```markdown
+* [x] Support GFM tables and ~~old styling~~
+* [x] Support highlight.js code syntax highlighting
+* [x] Support Mermaid diagram rendering
+* [ ] Support more custom markdown extensions
+```
 
 ---
 

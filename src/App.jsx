@@ -138,7 +138,15 @@ marked.use({
   }
 });
 
-const initialMarkdown = `# 🚀 萬能 Markdown 編輯轉換器
+const initialMarkdown = `---
+title: "萬能 Markdown 編輯轉換器"
+description: "一個極致美觀、高效的三向即時同步 Markdown 編輯器，支援 GFM、Mermaid、YAML Front Matter 等強大功能。"
+date: "2026-06-17"
+tags: [Markdown, WebApp, Productivity, Mermaid]
+draft: false
+---
+
+# 🚀 萬能 Markdown 編輯轉換器
 
 歡迎使用這個功能強大且設計精美的 **Vite + React + Tailwind CSS** 單頁應用程式 (PWA)！支援三向即時同步、多種格式匯出，並針對行動端與桌面端進行深度最佳化。
 
@@ -174,6 +182,18 @@ const initialMarkdown = `# 🚀 萬能 Markdown 編輯轉換器
 
 8. **歷史記錄管理（Undo / Redo）**：400ms 防抖，支援無限次上一步與下一步。
 
+9. **GFM 擴充語法支援**：
+   * 完整支援 **GitHub Flavored Markdown (GFM)**，包括表格、任務清單與 ~~刪除線~~ 等語法。
+
+10. **程式碼語法高亮**：
+    * 整合 \`highlight.js\`，自動為各類程式碼區塊提供高品質語法著色與一鍵複製按鈕。
+
+11. **Mermaid 流程圖與延遲載入**：
+    * 支援標準 Mermaid 繪圖語法，且具備延遲載入優化——僅在文件確實包含 \` \`\`\`mermaid \` 時載入對應模組，純文字文件零效能負擔。
+
+12. **YAML Front Matter 元資料卡片**：
+    * 文件開頭的 \`---\` 包裹區塊會渲染為結構化的精美 metadata 卡片（含標題、描述、日期、標籤與 Draft 草稿狀態），而非解析成混亂的分隔線。
+
 ---
 
 ## 📊 範例展示
@@ -187,6 +207,8 @@ const initialMarkdown = `# 🚀 萬能 Markdown 編輯轉換器
 | 文字可複製 PDF | ✅ | 霞鶩文楷向量字型嵌入 |
 | 美化 HTML 匯出 | ✅ | 雙欄大綱、A± 字體、主題切換 |
 | PWA 離線安裝 | ✅ | Service Worker + Web Manifest |
+| Mermaid 流程圖 | ✅ | 延遲載入，僅在需要時載入 |
+| YAML 元資料卡 | ✅ | 開頭 \`---\` 區塊美化渲染 |
 
 ### 2. 程式碼區塊
 
@@ -197,6 +219,29 @@ function syncFromMarkdown(md) {
   setHtml(html);         // 更新 HTML 原始碼
   setReadingHtml(html);  // 更新美化閱讀排版
 }
+\`\`\`
+
+### 3. 任務清單與刪除線
+
+* [x] 支援 GFM 表格渲染
+* [x] 支援 ~~舊版~~ highlight.js 程式碼著色
+* [x] 支援 Mermaid 流程圖載入與渲染
+* [ ] 支援更多客製化 Markdown 解析選項
+
+### 4. Mermaid 流程圖
+
+\`\`\`mermaid
+flowchart TD
+    A[Markdown 編輯區] <--> B(HTML 原始碼區)
+    A <--> C(美化閱讀排版區)
+    B <--> C
+    C -->|雙擊啟用| D[contentEditable 視覺編輯]
+    D -->|自動同步| A
+    
+    style A fill:#e0e7ff,stroke:#6366f1,stroke-width:2px;
+    style B fill:#f1f5f9,stroke:#64748b,stroke-width:2px;
+    style C fill:#ecfdf5,stroke:#10b981,stroke-width:2px;
+    style D fill:#fef3c7,stroke:#d97706,stroke-width:2px;
 \`\`\`
 
 > **提示**：雙擊右側「美化閱讀排版」的任意文字即可進行視覺化編輯，點擊空白處或其它面板即完成同步。
