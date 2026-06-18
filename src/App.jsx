@@ -776,6 +776,9 @@ export default function App() {
   // This replaces dangerouslySetInnerHTML so React never wipes Mermaid-rendered SVGs
   // on re-renders caused by unrelated state changes (e.g. isReadingEditable toggle).
   // We skip the update while in edit mode to preserve user's in-progress edits.
+  // IMPORTANT: layout/singlePane/leftPane/rightPane must be in deps because switching
+  // panes mounts the div for the first time — readingHtml hasn't changed but the ref
+  // just became valid, so we must re-run to populate the newly mounted element.
   useEffect(() => {
     if (isReadingEditable) return; // Don't overwrite user's live edits
     const resolvedHtml = resolveImageSources(readingHtml, imageMap);
@@ -787,7 +790,7 @@ export default function App() {
     });
     // Reset mermaid-rendered flags so the Mermaid effect will re-render fresh diagrams
     mermaidLastRenderKeyRef.current = '';
-  }, [readingHtml, imageMap]);
+  }, [readingHtml, imageMap, layout, singlePane, leftPane, rightPane]);
 
   // Syntax highlighting for regular code blocks
   useEffect(() => {
