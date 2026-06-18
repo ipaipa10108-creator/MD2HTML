@@ -671,35 +671,64 @@ export default function App() {
   useEffect(() => {
     const containsMermaid = markdown.includes('```mermaid');
     if (containsMermaid) {
+      let active = true;
+      const activeObservers = [];
+      
       const timer = setTimeout(() => {
-        const resetMermaidWrappers = () => {
-          const wrappers = document.querySelectorAll('.mermaid-wrapper');
-          wrappers.forEach(el => {
-            const encoded = el.getAttribute('data-mermaid-code') || '';
-            let rawCode = '';
-            try {
-              rawCode = decodeURIComponent(escape(window.atob(encoded)));
-            } catch (e) {
-              rawCode = '';
-            }
-            el.innerHTML = `<pre class="mermaid">${rawCode}</pre>`;
+        const renderSingleWrapper = (mermaid, el) => {
+          if (!active) return;
+          const encoded = el.getAttribute('data-mermaid-code') || '';
+          let rawCode = '';
+          try {
+            rawCode = decodeURIComponent(escape(window.atob(encoded)));
+          } catch (e) {
+            return;
+          }
+          
+          const preId = `mermaid-pre-${Math.random().toString(36).substring(2, 11)}`;
+          el.innerHTML = `<pre id="${preId}" class="mermaid">${rawCode}</pre>`;
+          
+          mermaid.run({ querySelector: `#${preId}` }).catch(err => {
+            console.warn("Mermaid execution error:", err);
           });
         };
 
         const renderDiagrams = (mermaid) => {
+          if (!active) return;
           mermaid.initialize({
             startOnLoad: false,
             theme: getMermaidTheme(),
             securityLevel: 'loose',
           });
-          resetMermaidWrappers();
-          mermaid.run({ querySelector: 'pre.mermaid, div.mermaid' }).catch(err => {
-            console.warn("Mermaid execution error:", err);
+
+          const wrappers = document.querySelectorAll('.mermaid-wrapper');
+          wrappers.forEach(el => {
+            if (el.clientWidth > 0) {
+              renderSingleWrapper(mermaid, el);
+            } else {
+              const observer = new ResizeObserver((entries) => {
+                if (!active) {
+                  observer.disconnect();
+                  return;
+                }
+                for (const entry of entries) {
+                  if (entry.target.clientWidth > 0) {
+                    observer.disconnect();
+                    const idx = activeObservers.indexOf(observer);
+                    if (idx > -1) activeObservers.splice(idx, 1);
+                    renderSingleWrapper(mermaid, entry.target);
+                  }
+                }
+              });
+              observer.observe(el);
+              activeObservers.push(observer);
+            }
           });
         };
 
         if (!mermaidRef.current) {
           import('mermaid').then((mermaidModule) => {
+            if (!active) return;
             const mermaid = mermaidModule.default;
             mermaidRef.current = mermaid;
             renderDiagrams(mermaid);
@@ -709,7 +738,11 @@ export default function App() {
         }
       }, 300); // 300ms debounce to avoid race conditions during fast typing
       
-      return () => clearTimeout(timer);
+      return () => {
+        active = false;
+        clearTimeout(timer);
+        activeObservers.forEach(obs => obs.disconnect());
+      };
     }
   }, [readingHtml, darkMode, markdown, mermaidBg, layout, singlePane, leftPane, rightPane]);
 
