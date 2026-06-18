@@ -124,16 +124,15 @@ marked.use({
 </div>`;
     },
     listitem(item) {
-      let itemHtml = item.text;
       if (item.task) {
         const checkedAttr = item.checked ? 'checked=""' : '';
-        itemHtml = `<span class="flex items-start gap-2">
+        const itemHtml = `<span class="flex items-start gap-2">
           <input type="checkbox" disabled ${checkedAttr} class="w-4 h-4 mt-1 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500/30 accent-indigo-500 cursor-default shrink-0" />
-          <span class="task-list-text">${item.text}</span>
+          <span class="task-list-text">${this.parser.parse(item.tokens)}</span>
         </span>`;
         return `<li class="task-list-item list-none py-0.5">${itemHtml}</li>`;
       }
-      return `<li>${itemHtml}</li>`;
+      return `<li>${this.parser.parse(item.tokens)}</li>`;
     }
   }
 });
@@ -501,7 +500,7 @@ export default function App() {
   // --- Mermaid Custom Background State ---
   const [mermaidBg, setMermaidBg] = useState(() => {
     const saved = localStorage.getItem('mermaid-bg');
-    return saved || 'dark';
+    return saved || 'white';
   });
 
   useEffect(() => {
@@ -513,7 +512,7 @@ export default function App() {
     if (mermaidBg === 'light') return '#f8fafc';
     if (mermaidBg === 'white') return '#ffffff';
     if (mermaidBg === 'transparent') return 'transparent';
-    return '#0f172a';
+    return '#ffffff';
   };
 
   const getMermaidTheme = () => {
@@ -695,32 +694,40 @@ export default function App() {
     if (containsMermaid) {
       let active = true;
       const timer = setTimeout(() => {
-        const renderDiagrams = (mermaid) => {
+        const renderDiagrams = async (mermaid) => {
           if (!active) return;
           mermaid.initialize({
             startOnLoad: false,
             theme: getMermaidTheme(),
             securityLevel: 'loose',
+            suppressErrorRendering: true,
           });
 
           const wrappers = document.querySelectorAll('.mermaid-wrapper');
-          wrappers.forEach(el => {
+          for (const el of wrappers) {
             if (!active) return;
             const encoded = el.getAttribute('data-mermaid-code') || '';
             let rawCode = '';
             try {
               rawCode = decodeURIComponent(escape(window.atob(encoded)));
             } catch (e) {
-              return;
+              continue;
             }
             
-            const preId = `mermaid-pre-${Math.random().toString(36).substring(2, 11)}`;
-            el.innerHTML = `<pre id="${preId}" class="mermaid">${rawCode}</pre>`;
-            
-            mermaid.run({ querySelector: `#${preId}` }).catch(err => {
-              console.warn("Mermaid execution error:", err);
-            });
-          });
+            const svgId = `mermaid-svg-${Math.random().toString(36).substring(2, 11)}`;
+            try {
+              await mermaid.parse(rawCode);
+              const { svg } = await mermaid.render(svgId, rawCode);
+              if (active) {
+                el.innerHTML = svg;
+              }
+            } catch (err) {
+              console.warn("Mermaid rendering failed:", err);
+              if (active) {
+                el.innerHTML = `<pre class="mermaid">${rawCode}</pre>`;
+              }
+            }
+          }
         };
 
         if (!mermaidRef.current) {

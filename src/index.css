@@ -306,7 +306,7 @@
 
 /* Mermaid wrapper styles and theme customization */
 .mermaid-wrapper {
-  background-color: var(--mermaid-bg, #0f172a);
+  background-color: var(--mermaid-bg, #ffffff);
   border: 1px solid var(--mermaid-border, rgba(226, 232, 240, 0.8));
   border-radius: 12px;
   padding: 1.5rem;
