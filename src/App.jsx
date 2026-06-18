@@ -554,6 +554,16 @@ export default function App() {
   // --- PDF Dropdown State ---
   const [activePdfDropdown, setActivePdfDropdown] = useState(null); // 'mobile-pdf' or '${uniqueKey}-pdf'
 
+  // --- File History State ---
+  const [fileHistory, setFileHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem('file-history');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [showHistoryMenu, setShowHistoryMenu] = useState(false);
+  const historyMenuRef = useRef(null);
+
   // --- Dark Mode State ---
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('theme');
@@ -638,6 +648,9 @@ export default function App() {
       if (!event.target.closest('.pdf-dropdown-container')) {
         setActivePdfDropdown(null);
       }
+      if (historyMenuRef.current && !historyMenuRef.current.contains(event.target)) {
+        setShowHistoryMenu(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('touchstart', handleClickOutside);
@@ -653,6 +666,21 @@ export default function App() {
       setToast(prev => ({ ...prev, show: false }));
     }, 4500);
   };
+
+  // Helper to add a snapshot to file history
+  const addToFileHistory = (label, md) => {
+    if (!md || !md.trim()) return;
+    setFileHistory(prev => {
+      // Avoid exact-duplicate content at top
+      if (prev.length > 0 && prev[0].markdown === md) return prev;
+      const entry = { id: Date.now(), label, markdown: md, timestamp: Date.now() };
+      const next = [entry, ...prev.filter(e => e.markdown !== md)].slice(0, 20);
+      try { localStorage.setItem('file-history', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const addToFileHistoryRef = useRef(addToFileHistory);
+  useEffect(() => { addToFileHistoryRef.current = addToFileHistory; });
 
   const handleMarkdownChangeRef = useRef(handleMarkdownChange);
   const handleHtmlChangeRef = useRef(handleHtmlChange);
@@ -885,6 +913,10 @@ export default function App() {
 
         if (mdContent) {
           handleMarkdownChangeRef.current(mdContent);
+          // Derive label: YAML title or file name
+          const fmResult = parseFrontMatter(mdContent);
+          const histLabel = fmResult.metadata?.title || mdFileName || '未命名文件';
+          addToFileHistoryRef.current(histLabel, mdContent);
           showToastRef.current(`📥 已成功讀取 Markdown 檔案: ${mdFileName}，並載入本機圖片！`, 'success');
         } else if (htmlContent) {
           let parsedContent = htmlContent;
@@ -899,6 +931,7 @@ export default function App() {
             }
           }
           handleHtmlChangeRef.current(parsedContent);
+          addToFileHistoryRef.current(htmlFileName || '未命名 HTML', parsedContent);
           showToastRef.current(`📥 已成功讀取 HTML 檔案: ${htmlFileName}，並載入本機圖片！`, 'success');
         } else if (Object.keys(newImageMap).length > 0) {
           showToastRef.current(`📥 已載入 ${Object.keys(newImageMap).length} 張本機圖片！`, 'success');
@@ -3744,6 +3777,93 @@ export default function App() {
                 </svg>
                 <span>黑底</span>
               </button>
+            </div>
+
+            {/* File History Dropdown */}
+            <div className="relative shrink-0" ref={historyMenuRef}>
+              <button
+                onClick={() => setShowHistoryMenu(v => !v)}
+                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                  fileHistory.length === 0
+                    ? 'text-slate-400 dark:text-slate-600 border-slate-200/40 dark:border-slate-800/40 cursor-default opacity-50'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 border-slate-200/60 dark:border-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-900'
+                }`}
+                title={fileHistory.length === 0 ? '尚無歷史紀錄' : '瀏覽歷史閱讀紀錄'}
+                disabled={fileHistory.length === 0}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="hidden sm:inline">歷史</span>
+                {fileHistory.length > 0 && (
+                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-[9px] font-extrabold">
+                    {fileHistory.length}
+                  </span>
+                )}
+                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {showHistoryMenu && fileHistory.length > 0 && (
+                <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xl z-50 p-1.5 flex flex-col gap-0.5 animate-fade-in max-h-[70vh] overflow-y-auto">
+                  <div className="flex items-center justify-between px-3 py-1.5 mb-0.5">
+                    <span className="text-[10px] font-extrabold tracking-widest uppercase text-slate-400 dark:text-slate-500">最近閱讀紀錄</span>
+                    <button
+                      onClick={() => {
+                        setFileHistory([]);
+                        try { localStorage.removeItem('file-history'); } catch {}
+                        setShowHistoryMenu(false);
+                      }}
+                      className="text-[10px] font-bold text-rose-500 dark:text-rose-400 hover:text-rose-600 transition-colors px-1.5 py-0.5 rounded hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                    >
+                      清除全部
+                    </button>
+                  </div>
+                  {fileHistory.map((entry) => {
+                    const isActive = entry.markdown === markdown;
+                    const dt = new Date(entry.timestamp);
+                    const timeStr = `${dt.getMonth() + 1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+                    return (
+                      <button
+                        key={entry.id}
+                        onClick={() => {
+                          const parsed = parseFrontMatter(entry.markdown);
+                          const parsedHTML = marked.parse(parsed.markdown);
+                          const sanitizedHTML = sanitizeHtml(parsedHTML);
+                          const metadataHtml = renderMetadataCard(parsed.metadata);
+                          setMarkdown(entry.markdown);
+                          setFrontMatterRaw(parsed.rawFrontMatter);
+                          setHtml(sanitizedHTML);
+                          setReadingHtml(metadataHtml + sanitizedHTML);
+                          setHistory([entry.markdown]);
+                          setHistoryIndex(0);
+                          setShowHistoryMenu(false);
+                          showToast(`📂 已載入：${entry.label}`, 'success');
+                        }}
+                        className={`w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-xl transition-all group ${
+                          isActive
+                            ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300'
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <span className="mt-0.5 shrink-0">
+                          <svg className={`w-3.5 h-3.5 ${isActive ? 'text-indigo-500' : 'text-slate-400 group-hover:text-slate-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-bold truncate leading-tight">{entry.label}</div>
+                          <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{timeStr} · {entry.markdown.length.toLocaleString()} 字元</div>
+                        </div>
+                        {isActive && (
+                          <span className="shrink-0 text-[9px] font-extrabold text-indigo-500 bg-indigo-100 dark:bg-indigo-900/40 px-1.5 py-0.5 rounded-full self-center">目前</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
