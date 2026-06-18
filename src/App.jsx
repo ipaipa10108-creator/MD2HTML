@@ -562,6 +562,8 @@ export default function App() {
     return false; // Default is light mode (白底模式)
   });
 
+  const [resizeKey, setResizeKey] = useState(0);
+
   const [captureTotalHeight, setCaptureTotalHeight] = useState(0);
 
   const measureCaptureHeight = () => {
@@ -603,6 +605,26 @@ export default function App() {
       localStorage.setItem('theme', 'light');
     }
   }, [darkMode]);
+
+  // Window Resize, Orientation Change, and CSS Animation End Listener to trigger Mermaid diagram updates
+  useEffect(() => {
+    const handleResize = () => {
+      setResizeKey(prev => prev + 1);
+    };
+    const handleAnimationEnd = (e) => {
+      if (e.animationName === 'fadeIn') {
+        setResizeKey(prev => prev + 1);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    document.addEventListener('animationend', handleAnimationEnd);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+      document.removeEventListener('animationend', handleAnimationEnd);
+    };
+  }, []);
 
   // Clean up timeouts
   useEffect(() => {
@@ -672,27 +694,7 @@ export default function App() {
     const containsMermaid = markdown.includes('```mermaid');
     if (containsMermaid) {
       let active = true;
-      const activeObservers = [];
-      
       const timer = setTimeout(() => {
-        const renderSingleWrapper = (mermaid, el) => {
-          if (!active) return;
-          const encoded = el.getAttribute('data-mermaid-code') || '';
-          let rawCode = '';
-          try {
-            rawCode = decodeURIComponent(escape(window.atob(encoded)));
-          } catch (e) {
-            return;
-          }
-          
-          const preId = `mermaid-pre-${Math.random().toString(36).substring(2, 11)}`;
-          el.innerHTML = `<pre id="${preId}" class="mermaid">${rawCode}</pre>`;
-          
-          mermaid.run({ querySelector: `#${preId}` }).catch(err => {
-            console.warn("Mermaid execution error:", err);
-          });
-        };
-
         const renderDiagrams = (mermaid) => {
           if (!active) return;
           mermaid.initialize({
@@ -703,26 +705,21 @@ export default function App() {
 
           const wrappers = document.querySelectorAll('.mermaid-wrapper');
           wrappers.forEach(el => {
-            if (el.clientWidth > 0) {
-              renderSingleWrapper(mermaid, el);
-            } else {
-              const observer = new ResizeObserver((entries) => {
-                if (!active) {
-                  observer.disconnect();
-                  return;
-                }
-                for (const entry of entries) {
-                  if (entry.target.clientWidth > 0) {
-                    observer.disconnect();
-                    const idx = activeObservers.indexOf(observer);
-                    if (idx > -1) activeObservers.splice(idx, 1);
-                    renderSingleWrapper(mermaid, entry.target);
-                  }
-                }
-              });
-              observer.observe(el);
-              activeObservers.push(observer);
+            if (!active) return;
+            const encoded = el.getAttribute('data-mermaid-code') || '';
+            let rawCode = '';
+            try {
+              rawCode = decodeURIComponent(escape(window.atob(encoded)));
+            } catch (e) {
+              return;
             }
+            
+            const preId = `mermaid-pre-${Math.random().toString(36).substring(2, 11)}`;
+            el.innerHTML = `<pre id="${preId}" class="mermaid">${rawCode}</pre>`;
+            
+            mermaid.run({ querySelector: `#${preId}` }).catch(err => {
+              console.warn("Mermaid execution error:", err);
+            });
           });
         };
 
@@ -741,10 +738,9 @@ export default function App() {
       return () => {
         active = false;
         clearTimeout(timer);
-        activeObservers.forEach(obs => obs.disconnect());
       };
     }
-  }, [readingHtml, darkMode, markdown, mermaidBg, layout, singlePane, leftPane, rightPane]);
+  }, [readingHtml, darkMode, markdown, mermaidBg, layout, singlePane, leftPane, rightPane, resizeKey]);
 
   // Syntax highlighting for regular code blocks
   useEffect(() => {
