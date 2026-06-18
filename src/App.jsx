@@ -687,12 +687,22 @@ export default function App() {
   };
 
   const mermaidRef = useRef(null);
+  // Track the last readingHtml+theme for which Mermaid was fully rendered
+  // so layout/resize events don't needlessly re-render already-rendered diagrams
+  const mermaidLastRenderKeyRef = useRef('');
 
   // Lazy-load Mermaid only when necessary
   useEffect(() => {
     const containsMermaid = markdown.includes('```mermaid');
     if (containsMermaid) {
+      // Build a key from content+theme. If only layout/resize changed,
+      // the key stays the same and we can skip already-rendered wrappers.
+      const contentKey = `${readingHtml}::${darkMode}::${mermaidBg}`;
+      const contentChanged = contentKey !== mermaidLastRenderKeyRef.current;
+
       let active = true;
+      // Use a shorter debounce for content changes, longer for mere resize
+      const debounce = contentChanged ? 300 : 0;
       const timer = setTimeout(() => {
         const renderDiagrams = async (mermaid) => {
           if (!active) return;
@@ -706,6 +716,13 @@ export default function App() {
           const wrappers = document.querySelectorAll('.mermaid-wrapper');
           for (const el of wrappers) {
             if (!active) return;
+
+            // If content/theme has NOT changed, skip wrappers that already
+            // have a rendered SVG (marked by data-mermaid-rendered attribute)
+            if (!contentChanged && el.getAttribute('data-mermaid-rendered') === 'true') {
+              continue;
+            }
+
             const encoded = el.getAttribute('data-mermaid-code') || '';
             let rawCode = '';
             try {
@@ -720,13 +737,19 @@ export default function App() {
               const { svg } = await mermaid.render(svgId, rawCode);
               if (active) {
                 el.innerHTML = svg;
+                el.setAttribute('data-mermaid-rendered', 'true');
               }
             } catch (err) {
               console.warn("Mermaid rendering failed:", err);
               if (active) {
                 el.innerHTML = `<pre class="mermaid">${rawCode}</pre>`;
+                el.setAttribute('data-mermaid-rendered', 'true');
               }
             }
+          }
+
+          if (active && contentChanged) {
+            mermaidLastRenderKeyRef.current = contentKey;
           }
         };
 
@@ -740,7 +763,7 @@ export default function App() {
         } else {
           renderDiagrams(mermaidRef.current);
         }
-      }, 300); // 300ms debounce to avoid race conditions during fast typing
+      }, debounce);
       
       return () => {
         active = false;
@@ -748,6 +771,23 @@ export default function App() {
       };
     }
   }, [readingHtml, darkMode, markdown, mermaidBg, layout, singlePane, leftPane, rightPane, resizeKey]);
+
+  // Imperatively update innerHTML of reading view containers when readingHtml changes.
+  // This replaces dangerouslySetInnerHTML so React never wipes Mermaid-rendered SVGs
+  // on re-renders caused by unrelated state changes (e.g. isReadingEditable toggle).
+  // We skip the update while in edit mode to preserve user's in-progress edits.
+  useEffect(() => {
+    if (isReadingEditable) return; // Don't overwrite user's live edits
+    const resolvedHtml = resolveImageSources(readingHtml, imageMap);
+    const refs = [readingViewRef, leftReadingViewRef, rightReadingViewRef];
+    refs.forEach(ref => {
+      if (ref.current) {
+        ref.current.innerHTML = resolvedHtml;
+      }
+    });
+    // Reset mermaid-rendered flags so the Mermaid effect will re-render fresh diagrams
+    mermaidLastRenderKeyRef.current = '';
+  }, [readingHtml, imageMap]);
 
   // Syntax highlighting for regular code blocks
   useEffect(() => {
@@ -1220,12 +1260,20 @@ export default function App() {
     }
   }
 
-  // Double click event on Reading View
+  // Double click event on Reading View — toggles edit mode.
+  // First double-click enters edit mode; second double-click exits (calls blur).
   const handleReadingDoubleClick = (side) => {
+    const readingRef = side === 'left' ? leftReadingViewRef : (side === 'right' ? rightReadingViewRef : readingViewRef);
+    if (isReadingEditable) {
+      // Already in edit mode: second double-click exits by triggering blur
+      if (readingRef.current) {
+        readingRef.current.blur();
+      }
+      return;
+    }
     setIsReadingEditable(true);
     activePaneRef.current = 'reading';
     setTimeout(() => {
-      const readingRef = side === 'left' ? leftReadingViewRef : (side === 'right' ? rightReadingViewRef : readingViewRef);
       if (readingRef.current) {
         readingRef.current.focus();
       }
@@ -3295,7 +3343,7 @@ export default function App() {
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                 </svg>
-                提示：下方雙擊進入直覺式編輯模式。
+                提示：雙擊進入編輯模式；編輯中再雙擊可退出。
               </span>
               <span className="font-semibold uppercase tracking-wider text-[9px] bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded">唯讀</span>
             </div>
@@ -3304,7 +3352,7 @@ export default function App() {
           {isReadingEditable && (
             <div className="mb-4 shrink-0 text-[10px] text-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-100/50 dark:border-emerald-950/40 rounded-lg px-2.5 py-1.5 flex items-center justify-between animate-pulse select-none">
               <span className="flex items-center gap-1.5 font-bold">
-                ✏️ 編輯中 (點擊文字直接修改)
+                ✏️ 編輯中（再次雙擊或點擊「完成」可退出）
               </span>
               <button
                 onClick={() => {
@@ -3314,12 +3362,16 @@ export default function App() {
                 }}
                 className="px-2.5 py-0.5 rounded bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[9px] shadow-sm transition-all"
               >
-                儲存並完成編輯
+                完成編輯
               </button>
             </div>
           )}
 
           {/* Editable HTML Viewer Container */}
+          {/* NOTE: We intentionally do NOT use dangerouslySetInnerHTML here.
+               Instead, a useEffect below updates innerHTML imperatively.
+               This prevents React from wiping Mermaid-rendered SVGs on
+               re-renders triggered by unrelated state changes (e.g. edit mode toggle). */}
           <div
             ref={readingRef}
             contentEditable={isReadingEditable}
@@ -3332,7 +3384,6 @@ export default function App() {
               '--mermaid-border': mermaidBg === 'transparent' ? 'transparent' : (darkMode ? 'rgba(51, 65, 85, 0.5)' : 'rgba(226, 232, 240, 0.8)')
             }}
             className={`flex-1 preview-prose focus:outline-none min-h-[300px] pb-12 ${isReadingEditable ? 'ring-2 ring-indigo-500/20 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-900/50 border border-indigo-200/30 dark:border-indigo-900/20' : ''}`}
-            dangerouslySetInnerHTML={{ __html: resolveImageSources(readingHtml, imageMap) }}
             data-placeholder="無內容。在此處雙擊或輸入文字，或在左邊編寫 Markdown..."
           />
         </div>
