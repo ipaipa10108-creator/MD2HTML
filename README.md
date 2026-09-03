@@ -59,6 +59,21 @@
 9. **毛玻璃風格確認對話框**
    - 全客製毛玻璃視覺 Modal，取代瀏覽器原生 `window.confirm`，用於清除內容、確認檔名等關鍵操作。
 
+10. **Mermaid 向量圖表即時視覺化與容錯支援**
+    - 內建 `mermaid.js` 向量繪圖引擎，支援流程圖 (Flowchart)、時序圖 (Sequence)、甘特圖 (Gantt)、圓餅圖 (Pie) 等各類專業圖表。
+    - **深淺色主題自適應**：圖表根據白底/黑底主題自動套用最佳化配色。
+    - **全匯出管道整合**：向量圖表完整嵌入於匯出之獨立 HTML、2x 高畫質切片圖片與 PDF 文件中。
+    - **三向同步保護**：在視覺化閱讀區編輯時，透過特製 Turndown 規則完整保留 ```` ```mermaid ```` 原始碼，不遺失任何圖表定義。
+    - **非標準語法寬容解析**：即使直接貼上未加反引號圍欄的 `mermaid\ngraph TD...` 鬆散語法，編輯器亦能自動容錯辨識並即時渲染出圖表。
+
+11. **✨ AI 複製排版智慧修復 (Smart Beautify)**
+    - 針對從 ChatGPT、Claude、Gemini、Antigravity 等 AI 聊天對話視窗複製文本時常見的排版缺陷，提供獨立「智慧美化」按鈕（採主動點擊觸發，不干擾標準格式輸入）：
+      - **檔案標籤破碎斷行修復**：將被多個換行切碎的檔案路徑（如 `\n\napi/timeline.js\n`）自動聚合為流暢行內程式碼 (`` `api/timeline.js` ``)，並接合前後破碎語句。
+      - **Emoji 標題階層化**：自動識別 `1. 🔍 ...` 升級為標準 Markdown 二級標題 (`## 1. 🔍`)；單獨 Emoji 標題（如 `📌 問題根因分析：`）升級為三級標題 (`### 📌`)。
+      - **條目與清單美化**：自動將行尾帶冒號的非清單條目格式化為粗體項目符號 (`* **條目**：`)。
+      - **Mermaid 區塊自動補全**：自動將未封閉或鬆散的 Mermaid 圖表程式碼補齊為標準圍欄代碼區塊。
+      - **完整歷史回溯**：智慧美化動作完整納入歷史佇列，隨時支援 `Ctrl + Z` 一鍵復原。
+
 ---
 
 ### 📦 安裝與本地開發
@@ -151,6 +166,21 @@ Welcome to the **Universal Markdown Editor Converter**! A visually stunning, hig
 
 9. **Custom Frosted-Glass Dialogs**
    - Premium glassmorphic modals replace native `window.confirm` for clear, delete, and filename confirmation actions.
+
+10. **Mermaid Vector Diagram Rendering & Fault-Tolerant Parsing**
+    - Integrated `mermaid.js` engine to render flowcharts, sequence diagrams, Gantt charts, pie charts, and more directly into responsive vector SVGs.
+    - **Theme Adaptive**: Automatically switches diagram palettes between Light and Dark modes.
+    - **Full Export Pipeline Integration**: Rendered diagrams are seamlessly embedded into standalone HTML exports, 2x sliced PNGs, and PDF documents.
+    - **Round-Trip Editing Preservation**: Custom Turndown rules guarantee ```` ```mermaid ```` code blocks remain intact during visual `contentEditable` sync.
+    - **Loose Syntax Tolerance**: Automatically recognizes un-fenced `mermaid\ngraph TD...` blocks pasted without backticks.
+
+11. **✨ AI Copy Smart Beautifier**
+    - Designed specifically to fix messy text copied from AI chat interfaces (ChatGPT, Claude, Gemini, Antigravity) via an opt-in toolbar button without altering standard user input:
+      - **Broken File Path Auto-Join**: Detects isolated file chip names separated by extraneous newlines and joins them into smooth inline code (`` `api/timeline.js` ``) while healing broken sentence structures.
+      - **Emoji Title Elevation**: Elevates numbered emoji titles (e.g. `1. 🔍`) to Markdown `##` headings and standalone emoji headers to `###` headings.
+      - **List Item Formatting**: Formats key lines ending in colons into crisp bold bullet points (`* **Key**:`).
+      - **Mermaid Fence Enclosure**: Automatically wraps loose un-fenced Mermaid definitions in proper ```` ```mermaid ```` code blocks.
+      - **Undo Support**: Integrated with the history stack, enabling full `Ctrl + Z` undo capability.
 
 ---
 

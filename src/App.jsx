@@ -3,6 +3,7 @@ import { marked } from 'marked';
 import TurndownService from 'turndown';
 import html2canvas from 'html2canvas';
 import JSZip from 'jszip';
+import mermaid from 'mermaid';
 
 // Initialize and configure Turndown Service for HTML to MD conversion
 const turndownService = new TurndownService({
@@ -64,6 +65,23 @@ turndownService.addRule('fencedCodeBlock', {
   }
 });
 
+// Custom rule for preserving Mermaid diagram blocks when converting back to Markdown
+turndownService.addRule('mermaidBlock', {
+  filter: function (node) {
+    return (
+      node.nodeName === 'DIV' &&
+      (node.classList.contains('mermaid-wrapper') || node.hasAttribute('data-mermaid-code'))
+    );
+  },
+  replacement: function (content, node) {
+    const code = decodeURIComponent(node.getAttribute('data-mermaid-code') || '');
+    if (code) {
+      return `\n\n\`\`\`mermaid\n${code.trim()}\n\`\`\`\n\n`;
+    }
+    return '';
+  }
+});
+
 // Configure marked to allow safe HTML tags and keep styling clean
 marked.setOptions({
   gfm: true,
@@ -74,6 +92,23 @@ marked.use({
   renderer: {
     code({ text, lang, escaped }) {
       const language = lang || '';
+      if (language.toLowerCase() === 'mermaid') {
+        const safeText = (text || '').trim();
+        const encoded = encodeURIComponent(safeText);
+        return `<div class="mermaid-wrapper my-6 select-none" contenteditable="false" data-mermaid-code="${encoded}">
+  <div class="mermaid-diagram flex justify-center items-center py-4 px-3 overflow-x-auto rounded-xl bg-slate-50/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 shadow-sm" data-code="${encoded}">
+    <div class="mermaid-svg-container flex justify-center w-full">
+      <div class="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500 py-3">
+        <svg class="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+        <span>繪製 Mermaid 圖表中...</span>
+      </div>
+    </div>
+  </div>
+</div>`;
+      }
       return `<div class="code-block-wrapper">
   <button class="copy-code-btn" aria-label="Copy code" title="複製此程式碼">
     <svg class="copy-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
@@ -126,6 +161,10 @@ const initialMarkdown = `# 🚀 萬能 Markdown 編輯轉換器
 
 8. **歷史記錄管理（Undo / Redo）**：400ms 防抖，支援無限次上一步與下一步。
 
+9. **Mermaid 向量圖表視覺化**：原生支援流程圖、時序圖、心智圖等圖表語法，並提供無引號裸寫自動容錯與向量匯出。
+
+10. **✨ AI 複製排版智慧修復**：針對從 AI 對話（如 ChatGPT / Claude / Antigravity）直接反白複製的內容，一鍵修復多餘換行、檔案代碼行內化、Emoji 標題階層化、粗體項目與補齊 Mermaid 語法。
+
 ---
 
 ## 📊 範例展示
@@ -135,6 +174,8 @@ const initialMarkdown = `# 🚀 萬能 Markdown 編輯轉換器
 | 功能 | 支援狀態 | 說明 |
 | :--- | :---: | :--- |
 | 三向即時同步 | ✅ | Markdown / HTML / 閱讀格式三者互轉 |
+| Mermaid 向量圖表 | ✅ | 流程圖、時序圖、心智圖即時渲染 |
+| AI 複製智慧修復 | ✅ | 一鍵修復多餘換行、Emoji 標題與語法 |
 | 圖片裁切匯出 | ✅ | Canvas 渲染 + JSZip 打包下載 |
 | 文字可複製 PDF | ✅ | 霞鶩文楷向量字型嵌入 |
 | 美化 HTML 匯出 | ✅ | 雙欄大綱、A± 字體、主題切換 |
@@ -145,10 +186,21 @@ const initialMarkdown = `# 🚀 萬能 Markdown 編輯轉換器
 \`\`\`javascript
 // 核心三向同步邏輯示意
 function syncFromMarkdown(md) {
-  const html = marked.parse(md);
+  const html = parseMarkdownToHtml(md);
   setHtml(html);         // 更新 HTML 原始碼
   setReadingHtml(html);  // 更新美化閱讀排版
 }
+\`\`\`
+
+### 3. Mermaid 圖表視覺化
+
+\`\`\`mermaid
+graph TD
+    A[使用者輸入 Markdown] --> B{包含 Mermaid 語法?}
+    B -->|"是 (標準/容錯)"| C[即時渲染高質感向量圖表]
+    B -->|否| D[標準 Markdown 格式渲染]
+    C --> E[支援 2x 圖片、向量 PDF 與 HTML 匯出]
+    D --> E
 \`\`\`
 
 > **提示**：雙擊右側「美化閱讀排版」的任意文字即可進行視覺化編輯，點擊空白處或其它面板即完成同步。
@@ -221,29 +273,254 @@ const findDOMNodeByText = (root, searchText) => {
   return null;
 };
 
-// Cache variable for the dynamically loaded Chinese font
-let cachedFontBase64 = null;
+// --- Mermaid & AI Copy Beautification Utilities ---
 
-const fetchFontWithCache = async () => {
-  if (cachedFontBase64) return cachedFontBase64;
-  
-  const url = 'https://cdn.jsdelivr.net/gh/lxgw/LxgwWenKai-Lite@main/fonts/TTF/LXGWWenKaiLite-Regular.ttf';
-  const response = await fetch(url);
-  if (!response.ok) throw new Error('Failed to fetch font from CDN');
-  
-  const buffer = await response.arrayBuffer();
-  
-  // Safe ArrayBuffer to Base64 conversion without call stack limitations
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  const chunkSize = 65536; // 64KB chunks
-  for (let i = 0; i < len; i += chunkSize) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+// Function to detect and wrap loose un-fenced mermaid blocks without mutating user's markdown
+const wrapLooseMermaid = (text) => {
+  if (!text) return '';
+  const lines = text.split('\n');
+  const result = [];
+  let inFencedCode = false;
+  let inLooseMermaid = false;
+  let looseMermaidLines = [];
+
+  const mermaidStartKeywords = [
+    'graph', 'flowchart', 'sequencediagram', 'classdiagram',
+    'statediagram', 'erdiagram', 'journey', 'gantt', 'pie',
+    'gitgraph', 'mindmap', 'timeline', 'quadrantchart', 'sankey-beta', 'zenuml'
+  ];
+
+  function isMermaidStart(line) {
+    const trimmed = line.trim().toLowerCase();
+    return mermaidStartKeywords.some(kw => trimmed.startsWith(kw));
   }
-  
-  cachedFontBase64 = window.btoa(binary);
-  return cachedFontBase64;
+
+  function isMermaidLine(line) {
+    const trimmed = line.trim();
+    if (!trimmed) return true;
+    if (isMermaidStart(line)) return true;
+    if (line.startsWith('  ') || line.startsWith('\t')) return true;
+    if (/(-->|---|--\s*\||-\.->|==>|subgraph\b|\bend\b|participant\b|actor\b|class\b|style\b|click\b|title\b|section\b|accTitle\b|accDescr\b|Note\b|activate\b|deactivate\b)/i.test(trimmed)) {
+      return true;
+    }
+    if (/^[A-Za-z0-9_]+\s*(\[|\(|\{|\(\()/.test(trimmed)) return true;
+    return false;
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('```')) {
+      if (inLooseMermaid) {
+        result.push('```mermaid');
+        result.push(...looseMermaidLines);
+        result.push('```');
+        looseMermaidLines = [];
+        inLooseMermaid = false;
+      }
+      inFencedCode = !inFencedCode;
+      result.push(line);
+      continue;
+    }
+
+    if (inFencedCode) {
+      result.push(line);
+      continue;
+    }
+
+    if (!inLooseMermaid) {
+      if (trimmed.toLowerCase() === 'mermaid' && i + 1 < lines.length && isMermaidStart(lines[i + 1])) {
+        inLooseMermaid = true;
+        looseMermaidLines = [];
+        continue;
+      } else if (isMermaidStart(line)) {
+        inLooseMermaid = true;
+        looseMermaidLines = [line];
+        continue;
+      } else {
+        result.push(line);
+      }
+    } else {
+      if (isMermaidLine(line)) {
+        looseMermaidLines.push(line);
+      } else {
+        while (looseMermaidLines.length && !looseMermaidLines[looseMermaidLines.length - 1].trim()) {
+          looseMermaidLines.pop();
+        }
+        result.push('```mermaid');
+        result.push(...looseMermaidLines);
+        result.push('```');
+        looseMermaidLines = [];
+        inLooseMermaid = false;
+        result.push(line);
+      }
+    }
+  }
+
+  if (inLooseMermaid) {
+    while (looseMermaidLines.length && !looseMermaidLines[looseMermaidLines.length - 1].trim()) {
+      looseMermaidLines.pop();
+    }
+    result.push('```mermaid');
+    result.push(...looseMermaidLines);
+    result.push('```');
+  }
+
+  return result.join('\n');
+};
+
+// Function to clean and beautify text directly copied from AI chats
+const cleanAndBeautifyText = (rawText) => {
+  if (!rawText) return '';
+
+  // 1. Wrap loose mermaid blocks
+  let text = wrapLooseMermaid(rawText);
+
+  // 2. Fix broken single-line file paths flanked by newlines into inline code `path/to/file.ext`
+  const fileExts = 'js|jsx|ts|tsx|vue|css|scss|sass|html|json|md|py|go|rs|java|c|cpp|h|sh|yml|yaml|sql|php|txt';
+  const isolatedFileRegex = new RegExp(`(\\n[ \\t]*)([a-zA-Z0-9_\\-\\.\\/]+\\.(?:${fileExts}))([ \\t]*\\n)`, 'g');
+  text = text.replace(isolatedFileRegex, ' `$2` ');
+
+  // Connect split sentences where previous line didn't end with a sentence terminator
+  text = text.replace(/([^\n\r。！？：!?:#*>\-])[ \t]*\n[ \t]*(`[^`\n]+`)[ \t]*\n[ \t]*([^\n\r#*>\-])/g, '$1 $2 $3');
+  text = text.replace(/([^\n\r。！？：!?:#*>\-])[ \t]*\n[ \t]*(`[^`\n]+`)/g, '$1 $2');
+  text = text.replace(/(`[^`\n]+`)[ \t]*\n[ \t]*([^\n\r#*>\-])/g, '$1 $2');
+
+  // Clean up excessive whitespace within sentences
+  text = text.replace(/[ \t]{2,}/g, ' ');
+
+  // 3. Process lines for headings and bullet points
+  const lines = text.split('\n');
+  const cleanedLines = [];
+  let inCode = false;
+
+  const emojiRegex = /^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('```')) {
+      inCode = !inCode;
+      cleanedLines.push(line);
+      continue;
+    }
+
+    if (inCode) {
+      cleanedLines.push(line);
+      continue;
+    }
+
+    // Numbered emoji heading: "1. 🔍 為何..." -> "## 1. 🔍 為何..."
+    const numEmojiMatch = trimmed.match(/^(\d+\.)\s*([\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}].*)$/u);
+    if (numEmojiMatch) {
+      if (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1] !== '') {
+        cleanedLines.push('');
+      }
+      cleanedLines.push(`## ${numEmojiMatch[1]} ${numEmojiMatch[2]}`);
+      cleanedLines.push('');
+      continue;
+    }
+
+    // Standalone emoji heading: "📌 問題根因分析：" or "🛠️ 修復方案："
+    if (emojiRegex.test(trimmed) && trimmed.length < 40 && !trimmed.startsWith('#') && !trimmed.startsWith('-') && !trimmed.startsWith('*')) {
+      const cleanTitle = trimmed.replace(/[：:]$/, '');
+      if (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1] !== '') {
+        cleanedLines.push('');
+      }
+      cleanedLines.push(`### ${cleanTitle}`);
+      cleanedLines.push('');
+      continue;
+    }
+
+    // Key-value sub-items ending with colon: "前端未傳遞化名旗標：" or "站內即時未讀通知 (user_notifications)："
+    const colonMatch = trimmed.match(/^([^#*>\-\d\s][^：:]{1,35})[：:]$/);
+    if (colonMatch && !trimmed.includes('http') && !trimmed.startsWith('```')) {
+      const keyName = colonMatch[1].trim();
+      cleanedLines.push(`* **${keyName}**：`);
+      continue;
+    }
+
+    cleanedLines.push(line);
+  }
+
+  // Remove excessive consecutive blank lines (max 2)
+  let result = cleanedLines.join('\n');
+  result = result.replace(/\n{3,}/g, '\n\n');
+
+  return result.trim();
+};
+
+// Preprocess markdown before passing to marked to tolerate loose mermaid blocks
+const parseMarkdownToHtml = (md) => {
+  if (!md) return '';
+  const preprocessed = wrapLooseMermaid(md);
+  return marked.parse(preprocessed);
+};
+
+let mermaidRenderCounter = 0;
+
+const renderAllMermaidDiagrams = async (isDark) => {
+  try {
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'loose',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      theme: isDark ? 'dark' : 'default',
+      themeVariables: isDark ? {
+        darkMode: true,
+        background: '#0f172a',
+        primaryColor: '#6366f1',
+        primaryTextColor: '#f8fafc',
+        primaryBorderColor: '#818cf8',
+        lineColor: '#94a3b8',
+        secondaryColor: '#3b82f6',
+        tertiaryColor: '#1e293b'
+      } : {
+        darkMode: false,
+        background: '#ffffff',
+        primaryColor: '#e0e7ff',
+        primaryTextColor: '#1e293b',
+        primaryBorderColor: '#6366f1',
+        lineColor: '#64748b',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#f8fafc'
+      }
+    });
+
+    const containers = document.querySelectorAll('.mermaid-diagram[data-code]');
+    for (let i = 0; i < containers.length; i++) {
+      const container = containers[i];
+      const encodedCode = container.getAttribute('data-code');
+      if (!encodedCode) continue;
+      const rawCode = decodeURIComponent(encodedCode).trim();
+      if (!rawCode) continue;
+
+      mermaidRenderCounter++;
+      const id = `mermaid-svg-${Date.now()}-${mermaidRenderCounter}-${Math.random().toString(36).substring(2, 6)}`;
+      
+      try {
+        const { svg } = await mermaid.render(id, rawCode);
+        const target = container.querySelector('.mermaid-svg-container') || container;
+        target.innerHTML = svg;
+      } catch (renderErr) {
+        console.warn('Mermaid rendering failed for code:', rawCode, renderErr);
+        const errEl = document.getElementById(id) || document.getElementById('d' + id);
+        if (errEl && errEl.parentNode) errEl.parentNode.removeChild(errEl);
+        
+        const target = container.querySelector('.mermaid-svg-container') || container;
+        target.innerHTML = `<div class="w-full text-left p-3 text-xs rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/50 select-none">
+          <div class="font-bold flex items-center gap-1.5 mb-1">
+            <span>⚠️ Mermaid 圖表語法尚未完成</span>
+          </div>
+          <div class="font-mono text-[11px] opacity-80 overflow-x-auto whitespace-pre">${renderErr?.message || '語法未完整或格式不支援'}</div>
+        </div>`;
+      }
+    }
+  } catch (globalErr) {
+    console.error('Failed to run mermaid diagrams:', globalErr);
+  }
 };
 
 export default function App() {
@@ -259,7 +536,7 @@ export default function App() {
   })();
 
   const defaultMarkdown = sharedText || initialMarkdown;
-  const defaultHtml = marked.parse(defaultMarkdown);
+  const defaultHtml = parseMarkdownToHtml(defaultMarkdown);
 
   // --- Content State ---
   const [markdown, setMarkdown] = useState(defaultMarkdown);
@@ -358,6 +635,21 @@ export default function App() {
     }
   }, [darkMode]);
 
+  // Render Mermaid Diagrams whenever content, theme, layout or pane view changes
+  useEffect(() => {
+    let isCancelled = false;
+    const timer = setTimeout(() => {
+      if (!isCancelled) {
+        renderAllMermaidDiagrams(darkMode);
+      }
+    }, 80);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [readingHtml, darkMode, layout, singlePane, leftPane, rightPane]);
+
   // Clean up timeouts
   useEffect(() => {
     return () => {
@@ -413,7 +705,7 @@ export default function App() {
               const sharedVal = text || title || url;
               if (sharedVal) {
                 setMarkdown(sharedVal);
-                const parsedHTML = marked.parse(sharedVal);
+                const parsedHTML = parseMarkdownToHtml(sharedVal);
                 setHtml(parsedHTML);
                 setReadingHtml(parsedHTML);
                 setHistory([sharedVal]);
@@ -613,7 +905,7 @@ export default function App() {
       
       activePaneRef.current = 'history';
       setMarkdown(prevMD);
-      const parsedHTML = marked.parse(prevMD);
+      const parsedHTML = parseMarkdownToHtml(prevMD);
       setHtml(parsedHTML);
       setReadingHtml(parsedHTML);
     }
@@ -627,7 +919,7 @@ export default function App() {
 
       activePaneRef.current = 'history';
       setMarkdown(nextMD);
-      const parsedHTML = marked.parse(nextMD);
+      const parsedHTML = parseMarkdownToHtml(nextMD);
       setHtml(parsedHTML);
       setReadingHtml(parsedHTML);
     }
@@ -641,7 +933,7 @@ export default function App() {
     const oldHtml = html;
     setMarkdown(val);
     
-    const parsedHTML = marked.parse(val);
+    const parsedHTML = parseMarkdownToHtml(val);
     setHtml(parsedHTML);
     setReadingHtml(parsedHTML);
 
@@ -779,7 +1071,7 @@ export default function App() {
       } else if (type === 'html') {
         handleHtmlChange(text);
       } else if (type === 'reading') {
-        const parsedHTML = marked.parse(text);
+        const parsedHTML = parseMarkdownToHtml(text);
         setHtml(parsedHTML);
         setMarkdown(text);
         setReadingHtml(parsedHTML);
@@ -789,6 +1081,28 @@ export default function App() {
       alert('請先授權剪貼簿讀取權限！');
       console.error('Failed to read clipboard: ', err);
     }
+  };
+
+  // --- Smart AI Copy Beautification Handler ---
+  const handleSmartBeautify = () => {
+    if (!markdown || !markdown.trim()) {
+      showToast('目前沒有可美化的 Markdown 內容！', 'info');
+      return;
+    }
+    
+    const beautified = cleanAndBeautifyText(markdown);
+    if (beautified === markdown.trim()) {
+      showToast('內容格式已非常整齊，無需額外調整！', 'info');
+      return;
+    }
+
+    activePaneRef.current = 'markdown';
+    setMarkdown(beautified);
+    const parsedHTML = parseMarkdownToHtml(beautified);
+    setHtml(parsedHTML);
+    setReadingHtml(parsedHTML);
+    pushToHistory(beautified);
+    showToast('✨ 已完成 AI 複製排版智慧修復！(支援 Ctrl+Z 復原)', 'success');
   };
 
   const handleClearAll = () => {
@@ -809,6 +1123,9 @@ export default function App() {
         showToast('找不到匯出區域', 'error');
         return;
       }
+
+      // Ensure Mermaid diagrams in the export area are rendered in white background
+      await renderAllMermaidDiagrams(false);
 
       // Render the offscreen element to a high-resolution canvas
       const canvas = await html2canvas(element, {
@@ -1101,8 +1418,10 @@ export default function App() {
   };
 
   const generateExportHTML = () => {
+    const activeRef = [readingViewRef, leftReadingViewRef, rightReadingViewRef].find(r => r && r.current);
+    const sourceHtml = activeRef && activeRef.current ? activeRef.current.innerHTML : readingHtml;
     const parser = new DOMParser();
-    const doc = parser.parseFromString(readingHtml, 'text/html');
+    const doc = parser.parseFromString(sourceHtml, 'text/html');
     const docHeadings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6');
     const exportedHeadings = [];
     
@@ -1490,6 +1809,29 @@ export default function App() {
       border-radius: 0;
       display: block;
       overflow-x: auto;
+    }
+
+    /* Mermaid Diagram Styling in Exported HTML */
+    .mermaid-wrapper {
+      margin: 1.75rem 0;
+      clear: both;
+    }
+    .mermaid-diagram {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow-x: auto;
+      box-shadow: var(--shadow);
+    }
+    .mermaid-diagram svg {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 0 auto;
     }
     
     .markdown-body table {
@@ -2175,6 +2517,9 @@ export default function App() {
       await new Promise(resolve => setTimeout(resolve, 200));
       const element = document.getElementById('export-capture-area');
       if (!element) return;
+
+      // Ensure Mermaid diagrams in capture area match exportTheme
+      await renderAllMermaidDiagrams(exportTheme === 'dark');
 
       const canvas = await html2canvas(element, {
         useCORS: true,
@@ -2891,6 +3236,20 @@ export default function App() {
             />
             <span>貼上後跳轉</span>
           </label>
+        )}
+
+        {/* Smart Beautify Button (only visible for markdown editor) */}
+        {isMd && (
+          <button
+            onClick={handleSmartBeautify}
+            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 border border-amber-200/60 dark:border-amber-950/60 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-all active:scale-95 shadow-xs"
+            title="✨ 智慧排版修復：自動修復從 AI 聊天視窗複製文字造成的換行破碎、Emoji 小標、條目清單及補齊 Mermaid 標籤"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+            </svg>
+            <span>智慧美化</span>
+          </button>
         )}
 
         {/* Paste Buttons */}
