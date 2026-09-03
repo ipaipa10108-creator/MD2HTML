@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": ".",
+  "homepage": "https://ipaipa10108-creator.github.io/MD2HTML",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

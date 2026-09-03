@@ -3934,7 +3934,6 @@ export default function App() {
             />
           </label>
         )}
-        )}
 
         {/* Paste Buttons */}
         <button
