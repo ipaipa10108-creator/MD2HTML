@@ -2,7 +2,7 @@ import { marked } from 'marked';
 
 marked.use({
   renderer: {
-    code({ text, lang, escaped }) {
+    code({ text, lang }) {
       const language = lang || '';
       return `<div class="code-block-wrapper" style="position: relative;">
   <button class="copy-code-btn" style="position: absolute; top: 8px; right: 8px;">Copy</button>

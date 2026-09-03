@@ -294,6 +294,16 @@
   display: none !important;
 }
 
+/* Fade-in Animation for smooth UI transitions */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
 /* --- Mermaid Diagram Styling --- */
 .mermaid-wrapper {
   position: relative;
@@ -325,6 +335,40 @@
   height: auto;
   display: block;
   margin: 0 auto;
+}
+
+.preview-prose pre.mermaid {
+  background-color: transparent !important;
+  color: inherit !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* Edit mode styling for Mermaid wrapper to prevent visual editor corruption */
+[contenteditable="true"] .mermaid-wrapper {
+  cursor: not-allowed;
+  position: relative;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+[contenteditable="true"] .mermaid-wrapper::after {
+  content: "📊 Mermaid 圖表 (於 Markdown 編輯器修改)";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background-color: rgba(99, 102, 241, 0.9);
+  color: #ffffff;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 6px;
+  pointer-events: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* Prose Strong & List Enhancement */
