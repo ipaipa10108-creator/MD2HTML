@@ -1,4 +1,4 @@
-const CACHE_NAME = 'md2html-v5';
+const CACHE_NAME = 'md2html-v6';
 const ASSETS = [
   './',
   './index.html',
