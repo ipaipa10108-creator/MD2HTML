@@ -756,7 +756,14 @@ export default function App() {
     }
   })();
 
-  const defaultMarkdown = sharedText || initialMarkdown;
+  const defaultMarkdown = (() => {
+    if (!sharedText) return initialMarkdown;
+    let shouldBeautify = true;
+    try {
+      shouldBeautify = localStorage.getItem('md2html-auto-beautify-share') !== 'false';
+    } catch {}
+    return shouldBeautify ? cleanAndBeautifyText(sharedText) : sharedText;
+  })();
   const initialParse = parseMarkdownToHtml(defaultMarkdown);
   const defaultHtml = initialParse.html;
   const defaultReadingHtml = initialParse.readingHtml;
@@ -774,13 +781,137 @@ export default function App() {
   // --- Local Relative Image Mapping State ---
   const [imageMap, setImageMap] = useState({});
 
+  // --- Settings & User Preferences State ---
+  const [autoJump, setAutoJump] = useState(() => {
+    try {
+      const saved = localStorage.getItem('md2html-auto-jump');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const [autoBeautifyOnShare, setAutoBeautifyOnShare] = useState(() => {
+    try {
+      const saved = localStorage.getItem('md2html-auto-beautify-share');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const [autoSwitchAfterBeautify, setAutoSwitchAfterBeautify] = useState(() => {
+    try {
+      const saved = localStorage.getItem('md2html-auto-switch-beautify');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const [syncScroll, setSyncScroll] = useState(() => {
+    try {
+      return localStorage.getItem('md2html-sync-scroll') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsTab, setSettingsTab] = useState('settings'); // 'settings' | 'tutorial'
+
+  const handleToggleAutoJump = (val) => {
+    setAutoJump(val);
+    try {
+      localStorage.setItem('md2html-auto-jump', String(val));
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
+  const handleToggleAutoBeautifyOnShare = (val) => {
+    setAutoBeautifyOnShare(val);
+    try {
+      localStorage.setItem('md2html-auto-beautify-share', String(val));
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
+  const handleToggleAutoSwitchAfterBeautify = (val) => {
+    setAutoSwitchAfterBeautify(val);
+    try {
+      localStorage.setItem('md2html-auto-switch-beautify', String(val));
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
+  const isSyncingRef = useRef(false);
+
+  const handleToggleSyncScroll = (val) => {
+    setSyncScroll(val);
+    try {
+      localStorage.setItem('md2html-sync-scroll', String(val));
+    } catch (e) {
+      console.warn(e);
+    }
+    if (val && layout === 'double' && leftPaneElementRef.current && rightPaneElementRef.current) {
+      const leftEl = leftPaneElementRef.current;
+      const rightEl = rightPaneElementRef.current;
+      const maxLeft = leftEl.scrollHeight - leftEl.clientHeight;
+      if (maxLeft > 0) {
+        const ratio = leftEl.scrollTop / maxLeft;
+        const maxRight = rightEl.scrollHeight - rightEl.clientHeight;
+        if (maxRight > 0) {
+          isSyncingRef.current = true;
+          rightEl.scrollTop = ratio * maxRight;
+          requestAnimationFrame(() => {
+            isSyncingRef.current = false;
+          });
+        }
+      }
+    }
+  };
+
+  const handleSyncScroll = (e, side) => {
+    if (!syncScroll || layout !== 'double') return;
+    if (isSyncingRef.current) return;
+
+    const sourceEl = e.currentTarget;
+    const targetEl = side === 'left' ? rightPaneElementRef.current : leftPaneElementRef.current;
+    if (!targetEl || !sourceEl) return;
+
+    const maxSourceScroll = sourceEl.scrollHeight - sourceEl.clientHeight;
+    if (maxSourceScroll <= 0) return;
+
+    const ratio = sourceEl.scrollTop / maxSourceScroll;
+    const maxTargetScroll = targetEl.scrollHeight - targetEl.clientHeight;
+    if (maxTargetScroll <= 0) return;
+
+    isSyncingRef.current = true;
+    targetEl.scrollTop = ratio * maxTargetScroll;
+
+    requestAnimationFrame(() => {
+      isSyncingRef.current = false;
+    });
+  };
+
   // --- Layout State ---
   const [layout, setLayout] = useState('single'); // default changed to 'single'
   const [previewFontSize, setPreviewFontSize] = useState(15); // default base font size is 15px
-  const [singlePane, setSinglePane] = useState(() => sharedText ? 'reading' : 'markdown'); // 'markdown' | 'html' | 'reading'
+  const [singlePane, setSinglePane] = useState(() => {
+    if (sharedText) {
+      let shouldSwitch = true;
+      try {
+        shouldSwitch = localStorage.getItem('md2html-auto-switch-beautify') !== 'false';
+      } catch {}
+      return shouldSwitch ? 'reading' : 'markdown';
+    }
+    return 'markdown';
+  }); // 'markdown' | 'html' | 'reading'
   const [leftPane, setLeftPane] = useState('markdown'); // 'markdown' | 'html' | 'reading'
   const [rightPane, setRightPane] = useState('reading'); // 'markdown' | 'html' | 'reading'
-  const [autoJump, setAutoJump] = useState(true); // Auto jump on paste
 
   const [showToolbars, setShowToolbars] = useState(true); // Auto hide/show toolbars on mobile scroll/tap
 
@@ -1261,7 +1392,7 @@ export default function App() {
       try {
         window.history.replaceState({}, document.title, window.location.pathname);
         setTimeout(() => {
-          showToast('📥 已成功載入分享的 Markdown 文字！', 'success');
+          showToast('📥 已成功載入分享內容' + (autoBeautifyOnShare ? '（已自動啟動智慧美化）' : '') + '！', 'success');
         }, 150);
       } catch (err) {
         console.error('Failed to clear search parameters:', err);
@@ -1279,18 +1410,21 @@ export default function App() {
               const { text, title, url } = event.data.data;
               const sharedVal = text || title || url;
               if (sharedVal) {
-                setMarkdown(sharedVal);
-                const { html: parsedHTML, readingHtml: parsedReadingHtml, rawFrontMatter } = parseMarkdownToHtml(sharedVal);
+                const finalVal = autoBeautifyOnShare ? cleanAndBeautifyText(sharedVal) : sharedVal;
+                setMarkdown(finalVal);
+                const { html: parsedHTML, readingHtml: parsedReadingHtml, rawFrontMatter } = parseMarkdownToHtml(finalVal);
                 setFrontMatterRaw(rawFrontMatter);
                 setHtml(parsedHTML);
                 setReadingHtml(parsedReadingHtml);
-                setHistory([sharedVal]);
+                setHistory([finalVal]);
                 setHistoryIndex(0);
-                setLayout('single');
-                setSinglePane('reading');
+                if (autoSwitchAfterBeautify) {
+                  setLayout('single');
+                  setSinglePane('reading');
+                }
                 window.history.replaceState({}, document.title, window.location.pathname);
                 setTimeout(() => {
-                  showToast('📥 已成功載入分享的 Markdown 文字！', 'success');
+                  showToast('📥 已成功載入分享內容' + (autoBeautifyOnShare ? '（已自動啟動智慧美化）' : '') + '！', 'success');
                 }, 150);
               }
             }
@@ -1307,7 +1441,7 @@ export default function App() {
       
       checkSharedData();
     }
-  }, [sharedText]);
+  }, [sharedText, autoBeautifyOnShare, autoSwitchAfterBeautify]);
 
   const lastScrollY = useRef(0);
 
@@ -1709,6 +1843,12 @@ export default function App() {
     setReadingHtml(parsedReadingHtml);
     pushToHistory(beautified);
     showToast('✨ 已完成 AI 複製排版智慧修復！(支援 Ctrl+Z 復原)', 'success');
+
+    if (autoSwitchAfterBeautify && layout === 'single') {
+      setTimeout(() => {
+        setSinglePane('reading');
+      }, 100);
+    }
   };
 
   const handleClearAll = () => {
@@ -3595,7 +3735,7 @@ export default function App() {
     const headings = parseHeadings(markdown);
 
     return (
-      <div className="flex items-center gap-1.5 shrink-0 select-none">
+      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 select-none">
         {headings.length > 0 && (
           <select
             onChange={(e) => {
@@ -3606,9 +3746,11 @@ export default function App() {
               }
             }}
             defaultValue=""
-            className="px-2 py-1.5 rounded-lg text-[11px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500/20 text-slate-700 dark:text-slate-200 max-w-[130px] sm:max-w-[160px] truncate"
+            className="px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-[11px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500/20 text-slate-700 dark:text-slate-200 max-w-[76px] sm:max-w-[160px] truncate"
+            title="快速跳至段落"
           >
-            <option value="" disabled>-- 快速跳至段落 --</option>
+            <option value="" disabled className="sm:hidden">📑 段落</option>
+            <option value="" disabled className="hidden sm:inline">-- 快速跳至段落 --</option>
             {headings.map((h, idx) => (
               <option key={idx} value={idx}>
                 {"\u00a0".repeat((h.level - 1) * 2)}
@@ -3621,12 +3763,14 @@ export default function App() {
 
         {/* Mermaid Background Customizer */}
         {markdown.includes('```mermaid') && (
-          <div className="flex items-center rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700 gap-1 select-none text-[10px] font-bold text-slate-500 dark:text-slate-400">
-            <span className="pl-1.5 pr-0.5 text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap">Mermaid 底圖:</span>
+          <div className="flex items-center rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700 gap-0.5 sm:gap-1 select-none text-[10px] font-bold text-slate-500 dark:text-slate-400">
+            <span className="hidden sm:inline pl-1.5 pr-0.5 text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap">Mermaid 底圖:</span>
+            <span className="sm:hidden pl-1 text-[10px]" title="Mermaid 底圖背景">📊</span>
             <select
               value={mermaidBg}
               onChange={(e) => setMermaidBg(e.target.value)}
-              className="bg-transparent border-0 py-0.5 pl-0.5 pr-4 text-[10px] font-bold text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-0 cursor-pointer select-none"
+              className="bg-transparent border-0 py-0.5 pl-0.5 pr-3 sm:pr-4 text-[10px] font-bold text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-0 cursor-pointer select-none"
+              title="調整 Mermaid 底圖背景"
             >
               <option value="dark" className="bg-white dark:bg-slate-900">深色</option>
               <option value="light" className="bg-white dark:bg-slate-900">淺色</option>
@@ -3636,20 +3780,18 @@ export default function App() {
           </div>
         )}
 
-
-
         {/* Mobile PDF Dropdown Button */}
-        <div className="relative flex sm:hidden pdf-dropdown-container">
+        <div className="relative flex sm:hidden pdf-dropdown-container shrink-0">
           <button
             onClick={() => setActivePdfDropdown(activePdfDropdown === 'mobile-pdf' ? null : 'mobile-pdf')}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20 hover:bg-white dark:hover:bg-slate-800 border border-indigo-200/30 dark:border-indigo-900/30 rounded-lg shadow-sm transition-all active:scale-95"
+            className="flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20 hover:bg-white dark:hover:bg-slate-800 border border-indigo-200/30 dark:border-indigo-900/30 rounded-lg shadow-sm transition-all active:scale-95 shrink-0"
             title="文件匯出與分享 (PDF/HTML)"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
             </svg>
             <span>匯出/分享</span>
-            <svg className="w-2.5 h-2.5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-2.5 h-2.5 ml-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
@@ -3783,7 +3925,10 @@ export default function App() {
           value={markdown}
           onChange={(e) => handleMarkdownChange(e.target.value, side, e.nativeEvent)}
           onPaste={handleMarkdownPaste}
-          onScroll={handleScroll}
+          onScroll={(e) => {
+            handleScroll(e);
+            handleSyncScroll(e, side);
+          }}
           onClick={handleContentClick}
           placeholder="在此處輸入或貼上您的 Markdown 內容..."
           className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200 overflow-y-auto animate-fade-in"
@@ -3795,7 +3940,10 @@ export default function App() {
           ref={elementRef}
           value={html}
           onChange={(e) => handleHtmlChange(e.target.value, side)}
-          onScroll={handleScroll}
+          onScroll={(e) => {
+            handleScroll(e);
+            handleSyncScroll(e, side);
+          }}
           onClick={handleContentClick}
           placeholder="在此處輸入或貼上您的 HTML 原始碼..."
           className="w-full h-full p-4 md:p-6 font-mono text-sm leading-relaxed bg-transparent border-0 resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200 overflow-y-auto animate-fade-in"
@@ -3806,7 +3954,10 @@ export default function App() {
       return (
         <div 
           ref={elementRef}
-          onScroll={handleScroll}
+          onScroll={(e) => {
+            handleScroll(e);
+            handleSyncScroll(e, side);
+          }}
           onClick={handleContentClick}
           className="w-full h-full overflow-y-auto p-4 md:p-6 flex flex-col animate-fade-in"
         >
@@ -3892,14 +4043,22 @@ export default function App() {
                 className="px-2 py-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all"
                 title="複製 HTML 原始碼"
               >
-                {copiedStatus[`${uniqueKey}-copy-html`] ? '已複製!' : '複製 HTML'}
+                {copiedStatus[`${uniqueKey}-copy-html`] ? '已複製!' : (
+                  <>
+                    <span className="hidden sm:inline">複製 </span>HTML
+                  </>
+                )}
               </button>
               <button
                 onClick={() => handleCopy('plain', `${uniqueKey}-copy-plain`)}
                 className="px-2 py-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all"
                 title="複製純文字內容"
               >
-                {copiedStatus[`${uniqueKey}-copy-plain`] ? '已複製!' : '複製純文字'}
+                {copiedStatus[`${uniqueKey}-copy-plain`] ? '已複製!' : (
+                  <>
+                    <span className="hidden sm:inline">複製 </span>純文字
+                  </>
+                )}
               </button>
             </>
           )}
@@ -4028,19 +4187,6 @@ export default function App() {
               A+
             </button>
           </div>
-        )}
-
-        {/* Auto Jump Checkbox (only visible for markdown editor in single column layout) */}
-        {isMd && layout === 'single' && (
-          <label className="flex items-center gap-1.5 text-[11px] font-extrabold text-slate-500 dark:text-slate-400 cursor-pointer select-none mr-2 bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 px-2 py-1 rounded-lg">
-            <input
-              type="checkbox"
-              checked={autoJump}
-              onChange={(e) => setAutoJump(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500/30 accent-indigo-500 cursor-pointer"
-            />
-            <span>貼上後跳轉</span>
-          </label>
         )}
 
         {/* Smart Beautify Button (only visible for markdown editor) */}
@@ -4349,6 +4495,21 @@ export default function App() {
                     </button>
                   ))}
                 </div>
+
+                {/* Settings & Tutorial Gear Button (Single Column) */}
+                <button
+                  onClick={() => {
+                    setSettingsTab('settings');
+                    setShowSettingsModal(true);
+                  }}
+                  className="p-1.5 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all active:scale-95 border border-slate-200/60 dark:border-slate-800/60 shadow-xs ml-1"
+                  title="偏好設定與使用教學"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
               </div>
               <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
                 {singlePane === 'reading' && (
@@ -4376,17 +4537,48 @@ export default function App() {
             {/* Left Pane Card */}
             <div className={`flex flex-col transition-all duration-300 ${showToolbars ? 'h-[500px] md:h-[600px] lg:h-full border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm' : 'h-[50vh] border-0 rounded-none bg-white dark:bg-slate-900'} overflow-hidden`}>
               <div className={`relative z-20 px-4 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between shrink-0 transition-all duration-300 ${showToolbars ? 'translate-y-0 opacity-100 py-3 h-auto' : 'md:translate-y-0 md:opacity-100 md:py-3 md:h-auto -translate-y-4 opacity-0 h-0 py-0 overflow-hidden pointer-events-none'}`}>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   <span className="text-xs font-bold text-slate-400 tracking-wider uppercase">左欄</span>
                   <select 
                     value={leftPane}
                     onChange={(e) => setLeftPane(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-850 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-slate-100"
+                    className="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-850 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-slate-100"
                   >
                     <option value="markdown">Markdown 編輯格式</option>
                     <option value="html">HTML 原始碼編輯</option>
                     <option value="reading">美化閱讀排版 (可編輯)</option>
                   </select>
+
+                  {/* Dual Pane Sync Scroll Toggle Button */}
+                  <button
+                    onClick={() => handleToggleSyncScroll(!syncScroll)}
+                    className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all active:scale-95 shadow-xs shrink-0 ${
+                      syncScroll 
+                        ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 ring-1 ring-indigo-500/20' 
+                        : 'text-slate-500 dark:text-slate-400 border-slate-200/60 dark:border-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                    title={syncScroll ? '點擊關閉雙欄同步捲動' : '點擊開啟雙欄同步捲動'}
+                  >
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.082l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                    </svg>
+                    <span className="hidden sm:inline">{syncScroll ? '同步捲動中' : '同步捲動'}</span>
+                  </button>
+
+                  {/* Settings & Tutorial Gear Button */}
+                  <button
+                    onClick={() => {
+                      setSettingsTab('settings');
+                      setShowSettingsModal(true);
+                    }}
+                    className="p-1.5 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all active:scale-95 border border-slate-200/60 dark:border-slate-800/60 shadow-xs shrink-0"
+                    title="偏好設定與使用教學"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </button>
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
                   {leftPane === 'reading' && (
@@ -4447,6 +4639,218 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* --- MODAL: SETTINGS & TUTORIAL --- */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm transition-all duration-300 animate-fade-in">
+          <div className="w-full max-w-xl max-h-[90vh] flex flex-col rounded-2xl glass shadow-2xl dark:shadow-indigo-950/30 border border-slate-200/70 dark:border-slate-800/90 bg-white/95 dark:bg-slate-900/95 overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-slate-200/70 dark:border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-950/30">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 dark:text-slate-100 text-base sm:text-lg">偏好設定與使用教學</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">自訂編輯行為，快速掌握各項強大功能</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Segmented Tabs Bar */}
+            <div className="flex border-b border-slate-200/70 dark:border-slate-800/80 px-5 bg-slate-50/30 dark:bg-slate-900/30">
+              <button
+                onClick={() => setSettingsTab('settings')}
+                className={`py-2.5 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+                  settingsTab === 'settings'
+                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+              >
+                <span>⚙️ 功能偏好設定</span>
+              </button>
+              <button
+                onClick={() => setSettingsTab('tutorial')}
+                className={`py-2.5 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+                  settingsTab === 'tutorial'
+                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+              >
+                <span>📖 新手使用教學</span>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 sm:p-6 overflow-y-auto max-h-[calc(90vh-140px)] space-y-4">
+              {settingsTab === 'settings' ? (
+                <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300">
+                  {/* Option 1: Auto Jump on Paste */}
+                  <label className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/70 dark:border-slate-800/80 hover:bg-slate-50/50 dark:hover:bg-slate-850/40 transition-all cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={autoJump}
+                      onChange={(e) => handleToggleAutoJump(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500/30 accent-indigo-500 shrink-0"
+                    />
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm">貼上內容後自動跳轉至「美化閱讀排版」</div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                        在單欄 Markdown 編輯模式中貼上文字時，程式將自動跳轉至美化排版視角，供您立即檢視排版成果。
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Option 2: Auto Beautify on Share */}
+                  <label className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/70 dark:border-slate-800/80 hover:bg-slate-50/50 dark:hover:bg-slate-850/40 transition-all cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={autoBeautifyOnShare}
+                      onChange={(e) => handleToggleAutoBeautifyOnShare(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500/30 accent-indigo-500 shrink-0"
+                    />
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm">接收分享文字時自動啟動「智慧美化」</div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                        當從手機其他 App（如 LINE、ChatGPT、網頁）分享文字至本工具時，自動修復換行破碎、階層小標與 Mermaid 圍欄。
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Option 3: Auto Switch to Reading on Share / Beautify */}
+                  <label className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/70 dark:border-slate-800/80 hover:bg-slate-50/50 dark:hover:bg-slate-850/40 transition-all cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={autoSwitchAfterBeautify}
+                      onChange={(e) => handleToggleAutoSwitchAfterBeautify(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500/30 accent-indigo-500 shrink-0"
+                    />
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm">自動美化後自動切換至「美化閱讀排版」頁面</div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                        在接收分享或執行智慧美化後，自動切換至美化排版視角（若未開啟則維持在目前編輯視角）。
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Option 4: Dual Pane Sync Scroll */}
+                  <label className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/70 dark:border-slate-800/80 hover:bg-slate-50/50 dark:hover:bg-slate-850/40 transition-all cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={syncScroll}
+                      onChange={(e) => handleToggleSyncScroll(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500/30 accent-indigo-500 shrink-0"
+                    />
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm">雙欄模式預設開啟「同步捲動」</div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                        開啟後，在雙欄對照模式下滾動左欄或右欄，另一欄將依百分比平滑同步捲動，對照編輯更加流暢。
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              ) : (
+                /* Tab 2: Tutorial Guide */
+                <div className="space-y-4 text-slate-700 dark:text-slate-300">
+                  <div className="p-4 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 space-y-1.5">
+                    <div className="font-bold text-indigo-600 dark:text-indigo-400 text-sm flex items-center gap-1.5">
+                      <span>🚀 歡迎使用萬能 Markdown 編輯轉換器！</span>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                      本工具專為高效編輯、排版、美化與匯出打造，以下提供核心功能的快速使用指南：
+                    </p>
+                  </div>
+
+                  {/* Tutorial Step 1 */}
+                  <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-white/50 dark:bg-slate-900/50 space-y-2">
+                    <div className="font-bold text-slate-900 dark:text-slate-100 text-xs sm:text-sm flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[11px] font-extrabold shrink-0">1</span>
+                      <span>三向即時互轉同步 ＆ 雙擊視覺化編輯</span>
+                    </div>
+                    <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-1.5 list-disc list-inside leading-relaxed pl-1">
+                      <li><strong>Markdown 編輯</strong>、<strong>HTML 原始碼</strong> 與 <strong>美化閱讀排版</strong> 三方即時同步。</li>
+                      <li>在「美化閱讀排版」<strong>雙擊任意段落</strong>，即可直接如同 Word 般視覺化修改內文，修改後自動同步回 Markdown！</li>
+                      <li>行動端具備輸入法防抖機制，打字絕對不跳行、不遺失游標。</li>
+                    </ul>
+                  </div>
+
+                  {/* Tutorial Step 2 */}
+                  <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-white/50 dark:bg-slate-900/50 space-y-2">
+                    <div className="font-bold text-slate-900 dark:text-slate-100 text-xs sm:text-sm flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[11px] font-extrabold shrink-0">2</span>
+                      <span>單欄與雙欄對照 ＆ 兩邊同步捲動</span>
+                    </div>
+                    <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-1.5 list-disc list-inside leading-relaxed pl-1">
+                      <li>頂部快速切換「單欄」與「雙欄對照」佈局，各欄位格式（Markdown/HTML/閱讀）皆可自由調配。</li>
+                      <li>雙欄模式下點選左欄「<strong>同步捲動</strong>」按鈕，滾動左側或右側皆會等比例精準聯動滑動。</li>
+                    </ul>
+                  </div>
+
+                  {/* Tutorial Step 3 */}
+                  <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-white/50 dark:bg-slate-900/50 space-y-2">
+                    <div className="font-bold text-slate-900 dark:text-slate-100 text-xs sm:text-sm flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[11px] font-extrabold shrink-0">3</span>
+                      <span>✨ 智慧美化（AI 對話排版一鍵修復）</span>
+                    </div>
+                    <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-1.5 list-disc list-inside leading-relaxed pl-1">
+                      <li>直接從 ChatGPT、Claude、DeepSeek 複製長文時，點選「<strong>智慧美化</strong>」按鈕。</li>
+                      <li>自動修復多餘換行破碎、條目冒號粗體化、Emoji 標題階層化，並自動補齊 Mermaid 圍欄！</li>
+                      <li>完整支援 `Ctrl + Z` 一鍵復原歷史。</li>
+                    </ul>
+                  </div>
+
+                  {/* Tutorial Step 4 */}
+                  <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-white/50 dark:bg-slate-900/50 space-y-2">
+                    <div className="font-bold text-slate-900 dark:text-slate-100 text-xs sm:text-sm flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[11px] font-extrabold shrink-0">4</span>
+                      <span>多元匯出（圖片切片 ZIP、文字 PDF、獨立 HTML）</span>
+                    </div>
+                    <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-1.5 list-disc list-inside leading-relaxed pl-1">
+                      <li><strong>圖片切片匯出</strong>：支援整頁、均等張數或固定像素裁切，勾選後打包 ZIP 下載，桌機可直接複製單圖貼至 LINE。</li>
+                      <li><strong>文字版 PDF</strong>：動態載入霞鶩文楷字型，輸出 100% 可反白複製搜尋的向量 PDF。</li>
+                      <li><strong>美化 HTML</strong>：獨立雙欄大綱、字體縮放、深淺色切換與 Scrollspy 滾動偵測，免安裝免網路即可開啟。</li>
+                    </ul>
+                  </div>
+
+                  {/* Tutorial Step 5 */}
+                  <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-white/50 dark:bg-slate-900/50 space-y-2">
+                    <div className="font-bold text-slate-900 dark:text-slate-100 text-xs sm:text-sm flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[11px] font-extrabold shrink-0">5</span>
+                      <span>PWA 漸進式安裝 ＆ 行動端分享整合</span>
+                    </div>
+                    <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-1.5 list-disc list-inside leading-relaxed pl-1">
+                      <li>桌機或手機皆可點擊「安裝為應用程式 / 新增至主畫面」，享受宛如原生 App 的流暢體驗與離線支援。</li>
+                      <li>在手機其他 App 中選取文字後點擊「分享」，即可直接選擇本應用程式傳入文字！</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3 border-t border-slate-200/70 dark:border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-950/30">
+              <span className="text-[11px] text-slate-400 font-medium">萬能 Markdown 編輯轉換器 v1.2.0</span>
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 transition-all active:scale-95"
+              >
+                完成
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- MODAL: CONFIRM FILENAME --- */}
       {showFilenameModal && (
