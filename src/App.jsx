@@ -480,13 +480,29 @@ const fetchFontWithCache = async () => {
 
 // --- Mermaid & AI Copy Beautification Utilities ---
 
+// Helper to identify lines that definitely cannot be part of Mermaid diagram syntax
+const isDefinitelyNotMermaid = (line) => {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  if (/^#{1,6}\s+/.test(trimmed)) return true;
+  if (/^[•*]\s+/.test(trimmed)) return true;
+  if (/^-\s+(?!--)/.test(trimmed)) return true;
+  if (/^\d+[.、)）]\s+/.test(trimmed)) return true;
+  if (/^[①②③④⑤⑥⑦⑧⑨⑩]/.test(trimmed)) return true;
+  if (/^(?:---+|───+|\*\*\*+|___+)$/.test(trimmed)) return true;
+  if (/^>/.test(trimmed) || /^[│|┌└├┼]/.test(trimmed)) return true;
+  if (/Diagram exceeds terminal width/i.test(trimmed)) return true;
+  if (/Displayed as code block/i.test(trimmed)) return true;
+  return false;
+};
+
 // 1. Repair AI CLI artifacts (e.g. Claude Code terminal banners, fullwidth dividers, over-extended code blocks)
 const repairAIArtifacts = (text) => {
   if (!text) return '';
 
   // Remove Claude Code / terminal CLI warning banners
-  text = text.replace(/^[│|]?[ \t]*Diagram exceeds terminal width[^\n]*\n?/gmi, '');
-  text = text.replace(/^[│|]?[ \t]*Displayed as code block\. Widen terminal[^\n]*\n?/gmi, '');
+  text = text.replace(/^[ \t]*[│|]?[ \t]*Diagram exceeds terminal width[^\n]*\n?/gmi, '');
+  text = text.replace(/^[ \t]*[│|]?[ \t]*Displayed as code block[^\n]*\n?/gmi, '');
 
   // Convert box-drawing horizontal dividers (e.g. ──────) to standard markdown ---
   text = text.replace(/^[ \t]*[─━═]{3,}[ \t]*$/gm, '---');
@@ -533,8 +549,9 @@ const repairAIArtifacts = (text) => {
 
       const isMdHeading = /^#{1,6}\s+/.test(trimmed);
       const isMdHr = /^---+$|^───+$/.test(trimmed);
+      const isNotMermaid = isDefinitelyNotMermaid(line);
 
-      if (codeHasMermaidStatements && (isMdHeading || isMdHr)) {
+      if (codeHasMermaidStatements && (isMdHeading || isMdHr || isNotMermaid)) {
         while (outLines.length && !outLines[outLines.length - 1].trim()) {
           outLines.pop();
         }
@@ -791,13 +808,15 @@ const wrapLooseMermaid = (text) => {
 
   function isMermaidLine(line) {
     const trimmed = line.trim();
-    if (!trimmed) return true;
+    if (!trimmed) return false;
+    if (isDefinitelyNotMermaid(line)) return false;
     if (isMermaidStart(line)) return true;
-    if (line.startsWith('  ') || line.startsWith('\t')) return true;
-    if (/(-->|---|--\s*\||-\.->|==>|subgraph\b|\bend\b|participant\b|actor\b|class\b|style\b|click\b|title\b|section\b|accTitle\b|accDescr\b|Note\b|activate\b|deactivate\b)/i.test(trimmed)) {
+    if (trimmed.startsWith('%%')) return true;
+    if (/(-->|---|--\s*\||-\.->|==>|~~|\.->|->>|<<-|->|<--)/i.test(trimmed)) return true;
+    if (/^(subgraph\b|\bend\b|participant\b|actor\b|classDef\b|class\b|style\b|click\b|linkStyle\b|title\b|section\b|accTitle\b|accDescr\b|Note\b|activate\b|deactivate\b|autonumber\b|loop\b|alt\b|else\b|opt\b|par\b|critical\b|break\b|rect\b)/i.test(trimmed)) {
       return true;
     }
-    if (/^[A-Za-z0-9_]+\s*(\[|\(|\{|\(\()/.test(trimmed)) return true;
+    if (/^[A-Za-z0-9_]+(?:\s*\[|\s*\(|\s*\{|\s*\{\{|\s*\[\[|\s*>)/.test(trimmed)) return true;
     return false;
   }
 
@@ -836,7 +855,31 @@ const wrapLooseMermaid = (text) => {
         result.push(line);
       }
     } else {
-      if (isMermaidLine(line)) {
+      if (!trimmed) {
+        let nextIsMermaid = false;
+        for (let j = i + 1; j < lines.length; j++) {
+          const nextTrimmed = lines[j].trim();
+          if (!nextTrimmed) continue;
+          if (isMermaidLine(lines[j])) {
+            nextIsMermaid = true;
+          }
+          break;
+        }
+
+        if (nextIsMermaid) {
+          looseMermaidLines.push(line);
+        } else {
+          while (looseMermaidLines.length && !looseMermaidLines[looseMermaidLines.length - 1].trim()) {
+            looseMermaidLines.pop();
+          }
+          result.push('```mermaid');
+          result.push(...looseMermaidLines);
+          result.push('```');
+          looseMermaidLines = [];
+          inLooseMermaid = false;
+          result.push(line);
+        }
+      } else if (isMermaidLine(line)) {
         looseMermaidLines.push(line);
       } else {
         while (looseMermaidLines.length && !looseMermaidLines[looseMermaidLines.length - 1].trim()) {
