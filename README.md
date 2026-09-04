@@ -86,11 +86,16 @@
     - **非標準語法寬容解析**：即使直接貼上未加反引號圍欄的 `mermaid\ngraph TD...` 鬆散語法，編輯器亦能自動容錯辨識並即時渲染出圖表。
 
 13. **✨ AI 複製排版智慧修復 (Smart Beautify)**
-    - 針對從 ChatGPT、Claude、Gemini、Antigravity 等 AI 聊天對話視窗複製文本時常見的排版缺陷，提供獨立「智慧美化」按鈕（採主動點擊觸發，不干擾標準格式輸入）：
+    - 針對從 ChatGPT、Claude、Gemini、Antigravity、Claude Code 終端機等對話視窗複製文本時常見的排版缺陷，提供獨立「智慧美化」按鈕（採主動點擊觸發，不干擾標準格式輸入）：
+      - **終端機／Unicode 框線表格轉 GFM**：自動識別終端機 CLI 輸出的 Unicode 繪圖字元表格（`│`, `─`, `┼`, `┌`, `└` 等）或 ASCII 表格（`+`, `-`, `|`），自動轉換為標準 GFM 表格。
+      - **多行儲存格智慧換行整併**：支援將被換行切碎的儲存格內容或括號附註（如 `(最嚴格舊約)`）智慧整併為 `<br>` 換行，並依序號精準辨識獨立資料行，防止行被擠壓或誤整併為單一儲存格。
+      - **GFM 表格防重複解析保護**：內建標準 GFM 分隔線偵測機制，避免重複點擊智慧美化或即時渲染時破壞原有 Markdown 表格結構。
+      - **CLI 溢出橫幅過濾**：自動清除終端機輸出時夾帶的 `Diagram exceeds terminal width` 與 `Displayed as code block` 等提示雜訊。
+      - **全形水平線標準化**：將全形連續橫線（`──────`）自動轉換為標準 Markdown 分隔線（`---`）。
       - **檔案標籤破碎斷行修復**：將被多個換行切碎的檔案路徑（如 `\n\napi/timeline.js\n`）自動聚合為流暢行內程式碼 (`` `api/timeline.js` ``)，並接合前後破碎語句。
       - **Emoji 標題階層化**：自動識別 `1. 🔍 ...` 升級為標準 Markdown 二級標題 (`## 1. 🔍`)；單獨 Emoji 標題（如 `📌 問題根因分析：`）升級為三級標題 (`### 📌`)。
       - **條目與清單美化**：自動將行尾帶冒號的非清單條目格式化為粗體項目符號 (`* **條目**：`)。
-      - **Mermaid 區塊自動補全**：自動將未封閉或鬆散的 Mermaid 圖表程式碼補齊為標準圍欄代碼區塊。
+      - **Mermaid 區塊自動補全與提早閉合**：自動將未封閉或鬆散的 Mermaid 圖表程式碼補齊為標準圍欄代碼區塊，並能精確判斷非圖表內文提早結束圍欄，防止後續段落被吞入。
       - **完整歷史回溯**：智慧美化動作完整納入歷史佇列，隨時支援 `Ctrl + Z` 一鍵復原。
 
 ---
@@ -114,15 +119,24 @@
 
 ---
 
-### 🚀 一鍵部署至 GitHub Pages
+### 🚀 部署至 GitHub Pages
 
-本專案已完整配置 `gh-pages` 與相對路徑。
+本專案支援 **GitHub Actions 全自動化部署** 與 **本機指令手動部署** 兩種方式：
 
-1. 關聯 GitHub 遠端倉庫：
+#### 方式一：GitHub Actions 自動化部署（推薦，推送到 `main` 自動生效）
+專案已內建 `.github/workflows/deploy.yml` 自動化工作流程：
+1. 將代碼推送至 `main` 分支。
+2. 進入 GitHub 倉庫頁面：**Settings** ➔ **Pages**。
+3. 在 **Build and deployment** ➔ **Source** 下拉選單中，將原本的 `Deploy from a branch` 改選為 **`GitHub Actions`**。
+4. 此後每次只要 `git push origin main`，GitHub 即會自動執行雲端建置並發布至 Pages，完全無需手動部署！
+
+#### 方式二：本機指令手動部署（備援方式）
+如維持使用 `gh-pages` 分支發布：
+1. 確保遠端倉庫已正確關聯：
    ```bash
    git remote add origin https://github.com/您的帳號/您的倉庫名.git
    ```
-2. 一鍵打包並推送：
+2. 執行一鍵自動清除快取、編譯並發布：
    ```bash
    npm run deploy
    ```
@@ -213,11 +227,16 @@ Welcome to the **Universal Markdown Editor Converter**! A visually stunning, hig
     - **Loose Syntax Tolerance**: Automatically recognizes un-fenced `mermaid\ngraph TD...` blocks pasted without backticks.
 
 13. **✨ AI Copy Smart Beautifier**
-    - Designed specifically to fix messy text copied from AI chat interfaces (ChatGPT, Claude, Gemini, Antigravity) via an opt-in toolbar button without altering standard user input:
+    - Designed specifically to fix messy text copied from AI chat interfaces (ChatGPT, Claude, Gemini, Antigravity, Claude Code CLI) via an opt-in toolbar button without altering standard user input:
+      - **Terminal / Unicode Box-Drawing Tables to GFM**: Automatically converts CLI box-drawing tables (`│`, `─`, `┼`, `┌`, `└`) or ASCII tables (`+`, `-`, `|`) into standard GitHub Flavored Markdown (GFM) tables.
+      - **Multi-Line Cell Auto-Merge & `<br>` Preservation**: Intelligently consolidates wrapped cell annotations (e.g. parenthetical notes) into clean `<br>` tags while preserving distinct rows based on list item / type prefixes.
+      - **GFM Table Repetition Guard**: Prevents re-parsing or corrupting tables that are already in valid GFM syntax.
+      - **CLI Terminal Banner Cleanup**: Strips terminal noise lines such as `Diagram exceeds terminal width` and `Displayed as code block`.
+      - **Fullwidth Horizontal Rule Normalization**: Automatically converts fullwidth Unicode dividers (`──────`) into standard Markdown dividers (`---`).
       - **Broken File Path Auto-Join**: Detects isolated file chip names separated by extraneous newlines and joins them into smooth inline code (`` `api/timeline.js` ``) while healing broken sentence structures.
       - **Emoji Title Elevation**: Elevates numbered emoji titles (e.g. `1. 🔍`) to Markdown `##` headings and standalone emoji headers to `###` headings.
       - **List Item Formatting**: Formats key lines ending in colons into crisp bold bullet points (`* **Key**:`).
-      - **Mermaid Fence Enclosure**: Automatically wraps loose un-fenced Mermaid definitions in proper ```` ```mermaid ```` code blocks.
+      - **Mermaid Fence Enclosure & Early Closing**: Automatically wraps un-fenced Mermaid definitions in ```` ```mermaid ```` code blocks and detects non-diagram text to close fences early.
       - **Undo Support**: Integrated with the history stack, enabling full `Ctrl + Z` undo capability.
 
 ---
@@ -243,11 +262,22 @@ Make sure [Node.js](https://nodejs.org/) is installed.
 
 ### 🚀 Deploying to GitHub Pages
 
-1. Connect to your GitHub remote:
+This project supports both **GitHub Actions Automated CI/CD Deployment** and **Manual CLI Deployment**:
+
+#### Option 1: GitHub Actions CI/CD (Recommended — automatic on push to `main`)
+The repository includes `.github/workflows/deploy.yml`:
+1. Push your commits to the `main` branch.
+2. In your GitHub repository, navigate to: **Settings** ➔ **Pages**.
+3. Under **Build and deployment** ➔ **Source**, change from `Deploy from a branch` to **`GitHub Actions`**.
+4. Every subsequent `git push origin main` will automatically build and deploy to GitHub Pages in under a minute without any manual commands!
+
+#### Option 2: Manual CLI Deployment (Fallback)
+To manually deploy via the `gh-pages` branch:
+1. Ensure your remote origin is connected:
    ```bash
    git remote add origin https://github.com/<your-username>/<your-repo>.git
    ```
-2. One-command deploy (builds + publishes to `gh-pages` branch):
+2. Run the deploy script (cleans cache, builds, and publishes):
    ```bash
    npm run deploy
    ```
