@@ -1,4 +1,4 @@
-const CACHE_NAME = 'md2html-v4';
+const CACHE_NAME = 'md2html-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -121,8 +121,12 @@ self.addEventListener('fetch', (e) => {
   );
 });
 
-// 2. Listen for messages from client requesting shared data
+// 2. Listen for messages from client
 self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+    return;
+  }
   if (event.data && event.data.type === 'GET_SHARED_DATA') {
     event.waitUntil(
       (async () => {

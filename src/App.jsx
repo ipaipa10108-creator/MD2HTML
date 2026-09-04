@@ -4121,12 +4121,15 @@ export default function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </div>
-            <div>
-              <h1 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 dark:from-slate-100 dark:via-indigo-300 dark:to-slate-100 bg-clip-text text-transparent font-sans">
-                萬能 Markdown 編輯轉換器
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 dark:from-slate-100 dark:via-indigo-300 dark:to-slate-100 bg-clip-text text-transparent font-sans">
+                  萬能 Markdown 編輯轉換器
+                </h1>
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                  v1.2.0
+                </span>
+              </div>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Vite + React + Tailwind CSS 三向同步系統</p>
-            </div>
           </div>
 
           {/* Quick Toolbar */}
