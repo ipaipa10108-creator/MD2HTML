@@ -595,6 +595,15 @@ const repairAIArtifacts = (text) => {
   return outLines.join('\n');
 };
 
+// Helper to detect if a line is already a standard GFM Markdown table separator (e.g. | --- | --- |)
+const isGfmTableSep = (l) => {
+  const trimmed = l.trim();
+  if (!trimmed || /^[─━═┼+┌┐┏┓╔╗└┘┗┛├┤┣┫╠╣┬┴┳┻]/.test(trimmed)) return false;
+  if (!/^[|\-:\s]+$/.test(trimmed) || !trimmed.includes('-')) return false;
+  const parts = trimmed.split('|').map(s => s.trim()).filter(Boolean);
+  return parts.length >= 1 && parts.every(s => /^:?-+:?$/.test(s));
+};
+
 // 2. Parse a block of table lines into a GFM markdown table, merging multiline wrapped rows
 const parseTableBlock = (lines) => {
   if (lines.length < 2) return null;
@@ -602,7 +611,7 @@ const parseTableBlock = (lines) => {
   let sepIdx = -1;
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i].trim();
-    if (/^[─━═\-+┼|│\s]+$/.test(l) && (/[┼+]/.test(l) || (/[─━═\-]/.test(l) && /[|│]/.test(l)))) {
+    if (/^[─━═\-+┼╂┿|│┃├┣╠┤┫╣\s]+$/.test(l) && (/[┼╂┿+]/.test(l) || (/[─━═\-]/.test(l) && /[|│┃]/.test(l)))) {
       sepIdx = i;
       break;
     }
@@ -611,7 +620,7 @@ const parseTableBlock = (lines) => {
   if (sepIdx <= 0) return null;
 
   let headerLineIdx = sepIdx - 1;
-  while (headerLineIdx >= 0 && /^[┌┏╔─━═┬┳╦\s]+$/.test(lines[headerLineIdx].trim())) {
+  while (headerLineIdx >= 0 && /^[┌┏╔─━═┬┳╦┐┓╗+\-\s]+$/.test(lines[headerLineIdx].trim()) && !/[│┃|]/.test(lines[headerLineIdx])) {
     headerLineIdx--;
   }
   if (headerLineIdx < 0) return null;
@@ -619,24 +628,34 @@ const parseTableBlock = (lines) => {
   const headerLine = lines[headerLineIdx];
   const sepLine = lines[sepIdx];
 
-  const isBoxDrawing = /[│┃┼─]/.test(headerLine) || /[│┃┼─]/.test(sepLine);
+  const isBoxDrawing = /[│┃┼─━═├┤┬┴]/.test(headerLine) || /[│┃┼─━═├┤┬┴]/.test(sepLine);
   const vSepRegex = isBoxDrawing ? /[│┃]/ : /[|]/;
 
-  const splitRow = (line) => line.split(vSepRegex).map(c => c.trim());
+  const splitRow = (line) => {
+    let s = line.trim();
+    if (s.startsWith('│') || s.startsWith('┃') || s.startsWith('|')) {
+      s = s.slice(1);
+    }
+    if (s.endsWith('│') || s.endsWith('┃') || s.endsWith('|')) {
+      s = s.slice(0, -1);
+    }
+    return s.split(vSepRegex).map(c => c.trim());
+  };
 
   let headers = splitRow(headerLine);
   const expectedColCount = headers.length;
+  if (expectedColCount === 0) return null;
 
   const rawRows = [];
   for (let i = sepIdx + 1; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
     if (!trimmed) continue;
-    if (/^[└┗╚─━═┴┻╩\s]+$/.test(trimmed) || /^[├┣╠─━═┼╂┿\s]+$/.test(trimmed)) {
+    if (/^[└┘┗┛╚╝─━═┴┻╩├┤┣┫╠╣┼╂┿+\s]+$/.test(trimmed)) {
       continue;
     }
 
-    const parts = line.split(vSepRegex).map(c => c.trim());
+    const parts = splitRow(line);
     if (parts.length === expectedColCount) {
       rawRows.push(parts);
     }
@@ -749,12 +768,28 @@ const convertBoxTablesToGFM = (text) => {
     const line = lines[i];
     const trimmed = line.trim();
 
-    const isBoxSep = (l) => /^[─━═\-+┼|│\s]+$/.test(l) && (/[┼+]/.test(l) || (/[─━═\-]/.test(l) && /[|│]/.test(l)));
+    // If next line is already a valid standard GFM separator, do not treat as an unparsed box table
+    if (i + 1 < lines.length && isGfmTableSep(lines[i + 1])) {
+      result.push(line);
+      i++;
+      continue;
+    }
+
+    const isBoxSep = (l) => /^[─━═\-+┼╂┿|│┃├┣╠┤┫╣\s]+$/.test(l) && (/[┼╂┿+]/.test(l) || (/[─━═\-]/.test(l) && /[|│┃]/.test(l)));
     const hasColSep = (l) => /[│┃]/.test(l) || (/\|/.test(l) && !l.startsWith('| ---'));
 
-    if (i + 1 < lines.length && hasColSep(trimmed) && isBoxSep(lines[i + 1].trim())) {
-      const tableLines = [line, lines[i + 1]];
-      i += 2;
+    // Skip top border if present
+    const isTopBorder = /^[┌┏╔─━═┬┳╦┐┓╗+\-\s]+$/.test(trimmed) && !/[│┃|]/.test(trimmed) && (/[┌┏╔]/.test(trimmed) || /^[+\-][+\-\s]+$/.test(trimmed));
+    let checkIdx = i;
+    let headerIdx = i;
+    if (isTopBorder && i + 2 < lines.length && hasColSep(lines[i + 1].trim()) && isBoxSep(lines[i + 2].trim())) {
+      headerIdx = i + 1;
+      checkIdx = i + 1;
+    }
+
+    if (checkIdx + 1 < lines.length && hasColSep(lines[checkIdx].trim()) && isBoxSep(lines[checkIdx + 1].trim())) {
+      const tableLines = [lines[headerIdx], lines[checkIdx + 1]];
+      i = checkIdx + 2;
       while (i < lines.length) {
         const rowLine = lines[i];
         const rowTrimmed = rowLine.trim();
@@ -762,7 +797,7 @@ const convertBoxTablesToGFM = (text) => {
         if (/^#{1,6}\s+/.test(rowTrimmed) || (/^[─━═\-]{3,}$/.test(rowTrimmed) && !/[┼+]/.test(rowTrimmed))) {
           break;
         }
-        if (hasColSep(rowTrimmed) || /^[└┗╚─━═┴┻╩├┣╠┼╂┿\s]+$/.test(rowTrimmed)) {
+        if (hasColSep(rowTrimmed) || /^[└┘┗┛╚╝─━═┴┻╩├┤┣┫╠╣┼╂┿+\s]+$/.test(rowTrimmed)) {
           tableLines.push(rowLine);
           i++;
         } else {
@@ -785,6 +820,7 @@ const convertBoxTablesToGFM = (text) => {
 
   return result.join('\n');
 };
+
 
 // Function to detect and wrap loose un-fenced mermaid blocks without mutating user's markdown
 const wrapLooseMermaid = (text) => {
