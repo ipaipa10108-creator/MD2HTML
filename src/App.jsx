@@ -138,9 +138,10 @@ marked.use({
     listitem(item) {
       if (item.task) {
         const checkedAttr = item.checked ? 'checked=""' : '';
+        const tokensWithoutCheckbox = (item.tokens || []).filter(t => t.type !== 'checkbox');
         const itemHtml = `<span class="flex items-start gap-2">
           <input type="checkbox" disabled ${checkedAttr} class="w-4 h-4 mt-1 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500/30 accent-indigo-500 cursor-default shrink-0" />
-          <span class="task-list-text">${this.parser.parse(item.tokens)}</span>
+          <span class="task-list-text">${this.parser.parse(tokensWithoutCheckbox)}</span>
         </span>`;
         return `<li class="task-list-item list-none py-0.5">${itemHtml}</li>`;
       }
@@ -451,6 +452,32 @@ const resolveImageSources = (htmlString, map) => {
 // Cache variable for the dynamically loaded Chinese font
 let cachedFontBase64 = null;
 
+const fetchFontWithCache = async () => {
+  if (cachedFontBase64) return cachedFontBase64;
+  
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
+  
+  const url = 'https://cdn.jsdelivr.net/gh/lxgw/LxgwWenKai-Lite@main/fonts/TTF/LXGWWenKaiLite-Regular.ttf';
+  const response = await fetch(url, { signal: controller.signal });
+  clearTimeout(timeoutId);
+  
+  if (!response.ok) throw new Error(`Failed to fetch font from CDN (status: ${response.status})`);
+  
+  const buffer = await response.arrayBuffer();
+  
+  // Safe ArrayBuffer to Base64 conversion without call stack limitations
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  const chunkSize = 65536; // 64KB chunks
+  for (let i = 0; i < len; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  cachedFontBase64 = window.btoa(binary);
+  return cachedFontBase64;
+};
+
 // --- Mermaid & AI Copy Beautification Utilities ---
 
 // Function to detect and wrap loose un-fenced mermaid blocks without mutating user's markdown
@@ -565,9 +592,6 @@ const cleanAndBeautifyText = (rawText) => {
   text = text.replace(/([^\n\r。！？：!?:#*>\-])[ \t]*\n[ \t]*(`[^`\n]+`)/g, '$1 $2');
   text = text.replace(/(`[^`\n]+`)[ \t]*\n[ \t]*([^\n\r#*>\-])/g, '$1 $2');
 
-  // Clean up excessive whitespace within sentences
-  text = text.replace(/[ \t]{2,}/g, ' ');
-
   // 3. Process lines for headings and bullet points
   const lines = text.split('\n');
   const cleanedLines = [];
@@ -590,9 +614,20 @@ const cleanAndBeautifyText = (rawText) => {
       continue;
     }
 
+    // Preserve leading indentation for nested lists, code, and blockquotes
+    const indentMatch = line.match(/^([ \t]*)(.*)$/);
+    const indent = indentMatch ? indentMatch[1] : '';
+    let content = indentMatch ? indentMatch[2] : trimmed;
+
+    // Only collapse excessive whitespace within the content (not leading indent, and not inside tables)
+    if (!content.startsWith('|')) {
+      content = content.replace(/([^\s])[ \t]{2,}([^\s])/g, '$1 $2');
+    }
+    line = indent + content;
+
     // Numbered emoji heading: "1. 🔍 為何..." -> "## 1. 🔍 為何..."
     const numEmojiMatch = trimmed.match(/^(\d+\.)\s*([\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}].*)$/u);
-    if (numEmojiMatch) {
+    if (numEmojiMatch && !trimmed.startsWith('#')) {
       if (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1] !== '') {
         cleanedLines.push('');
       }
@@ -612,9 +647,9 @@ const cleanAndBeautifyText = (rawText) => {
       continue;
     }
 
-    // Key-value sub-items ending with colon: "前端未傳遞化名旗標：" or "站內即時未讀通知 (user_notifications)："
+    // Key-value sub-items ending with colon: "前端未傳遞化名旗標：" (only at root level when not already indented)
     const colonMatch = trimmed.match(/^([^#*>\-\d\s][^：:]{1,35})[：:]$/);
-    if (colonMatch && !trimmed.includes('http') && !trimmed.startsWith('```')) {
+    if (colonMatch && !trimmed.includes('http') && !trimmed.startsWith('```') && !indent) {
       const keyName = colonMatch[1].trim();
       cleanedLines.push(`* **${keyName}**：`);
       continue;
@@ -1505,9 +1540,9 @@ export default function App() {
     // If the edit came from the right column, align the left column
     if (layout === 'double' && side === 'right') {
       if (leftPane === 'html') {
-        alignLeftPaneToRight('html', oldHtml, sanitizedHTML);
+        alignLeftPaneToRight('html', oldHtml, parsedHTML);
       } else if (leftPane === 'reading') {
-        alignLeftPaneToRight('reading', oldHtml, finalReadingHtml);
+        alignLeftPaneToRight('reading', oldHtml, parsedReadingHtml);
       }
     }
   }
@@ -1760,12 +1795,18 @@ export default function App() {
         const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
 
         if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-          await navigator.share({
-            files: [pdfFile],
-            title: '分享 PDF 文件',
-            text: '這是從 Markdown 編輯器產生的 PDF 文件。'
-          });
-          showToast('✅ 分享視窗已開啟！', 'success');
+          try {
+            await navigator.share({
+              files: [pdfFile],
+              title: '分享 PDF 文件',
+              text: '這是從 Markdown 編輯器產生的 PDF 文件。'
+            });
+            showToast('✅ 分享視窗已開啟！', 'success');
+          } catch (shareErr) {
+            if (shareErr.name !== 'AbortError') {
+              throw shareErr;
+            }
+          }
         } else {
           // Fallback if sharing is unsupported
           pdf.save(fileName);
@@ -1813,8 +1854,9 @@ export default function App() {
         }
       };
       
-      // Parse markdown text line-by-line
-      const lines = markdown.split(/\r?\n/);
+      // Parse markdown text line-by-line (strip front matter if present)
+      const { markdown: cleanMd } = parseFrontMatter(markdown);
+      const lines = cleanMd.split(/\r?\n/);
       let inCodeBlock = false;
       
       for (let i = 0; i < lines.length; i++) {
@@ -1920,11 +1962,17 @@ export default function App() {
           const text = listMatch[3];
           
           const isNumbered = /^\d+/.test(marker.trim());
-          const displayMarker = isNumbered ? marker.trim() : '•';
+          let displayMarker = isNumbered ? marker.trim() : '•';
+          let itemText = text;
+          if (/^\[[ xX]\]\s*/.test(text)) {
+            const isChecked = /^\[[xX]\]/.test(text);
+            displayMarker = isChecked ? '[✓]' : '[  ]';
+            itemText = text.replace(/^\[[ xX]\]\s*/, '');
+          }
           
           const indentWidth = 15 + indentLevel * 10;
           pdf.setFontSize(11);
-          const wrapped = pdf.splitTextToSize(text, printableWidth - indentWidth);
+          const wrapped = pdf.splitTextToSize(itemText, printableWidth - indentWidth);
           const lineHeight = 16;
           
           wrapped.forEach((l, idx) => {
@@ -1961,12 +2009,18 @@ export default function App() {
         const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
         
         if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-          await navigator.share({
-            files: [pdfFile],
-            title: '分享文字版 PDF 文件',
-            text: '這是從 Markdown 編輯器產生的文字版 PDF 文件（可複製內文）。'
-          });
-          showToast('✅ 分享視窗已開啟！', 'success');
+          try {
+            await navigator.share({
+              files: [pdfFile],
+              title: '分享文字版 PDF 文件',
+              text: '這是從 Markdown 編輯器產生的文字版 PDF 文件（可複製內文）。'
+            });
+            showToast('✅ 分享視窗已開啟！', 'success');
+          } catch (shareErr) {
+            if (shareErr.name !== 'AbortError') {
+              throw shareErr;
+            }
+          }
         } else {
           pdf.save(fileName);
           showToast('⚠️ 本裝置不支援直接分享 PDF，已自動為您下載！', 'warning');
@@ -2163,6 +2217,41 @@ export default function App() {
       transform: translateX(0);
     }
     
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 0.75rem;
+      margin-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-header-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-main);
+      font-family: var(--font-heading);
+    }
+    .sidebar-close-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .sidebar-close-btn:hover {
+      background-color: var(--bg-card);
+      color: var(--text-main);
+    }
+
     .sidebar-toggle-btn {
       position: absolute;
       top: 1.5rem;
@@ -2178,12 +2267,15 @@ export default function App() {
       justify-content: center;
       cursor: pointer;
       box-shadow: var(--shadow);
-      z-index: 11;
+      z-index: 100;
       transition: background-color 0.2s, color 0.2s, right 0.3s;
     }
     
     body:not(.sidebar-expanded) .sidebar-toggle-btn {
-      right: -24px;
+      right: -36px;
+      border-radius: 0 8px 8px 0;
+      width: 36px;
+      height: 40px;
     }
     
     .sidebar-toggle-btn:hover {
@@ -2344,6 +2436,11 @@ export default function App() {
     
     .markdown-body li {
       margin-bottom: 0.5rem;
+    }
+
+    .markdown-body li.task-list-item {
+      list-style-type: none !important;
+      padding-left: 0 !important;
     }
     
     .markdown-body blockquote {
@@ -2805,6 +2902,19 @@ export default function App() {
 
   <div class="app-container">
     <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-header-title">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7" />
+          </svg>
+          <span>章節目錄</span>
+        </div>
+        <button id="sidebar-close-btn" class="sidebar-close-btn" title="關閉目錄">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
       <nav class="toc">
         ${tocHtml}
       </nav>
@@ -2837,7 +2947,25 @@ export default function App() {
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script>
-    hljs.highlightAll();
+  (function() {
+    // Safe storage wrapper to prevent SecurityError on file:// or strict privacy modes
+    var safeStorage = {
+      getItem: function(key) {
+        try { return localStorage.getItem(key); } catch (e) { return null; }
+      },
+      setItem: function(key, val) {
+        try { localStorage.setItem(key, val); } catch (e) {}
+      }
+    };
+
+    // Safe highlight.js initialization
+    try {
+      if (typeof hljs !== 'undefined' && typeof hljs.highlightAll === 'function') {
+        hljs.highlightAll();
+      }
+    } catch (e) {
+      console.warn('Highlight.js initialization skipped:', e);
+    }
 
     // --- Copy Code Blocks ---
     document.addEventListener('click', function(e) {
@@ -2849,14 +2977,16 @@ export default function App() {
         var pre = wrapper ? wrapper.querySelector('pre') : null;
         if (pre) {
           var text = pre.textContent || '';
-          navigator.clipboard.writeText(text).then(function() {
-            btn.classList.add('copied');
-            setTimeout(function() {
-              btn.classList.remove('copied');
-            }, 2000);
-          }).catch(function(err) {
-            console.error('Failed to copy code:', err);
-          });
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function() {
+              btn.classList.add('copied');
+              setTimeout(function() {
+                btn.classList.remove('copied');
+              }, 2000);
+            }).catch(function(err) {
+              console.error('Failed to copy code:', err);
+            });
+          }
         }
       }
     });
@@ -2864,40 +2994,49 @@ export default function App() {
     // --- Theme ---
     function applyTheme(theme) {
       document.body.setAttribute('data-theme', theme);
-      localStorage.setItem('exported-theme', theme);
+      safeStorage.setItem('exported-theme', theme);
     }
-    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)');
-    applyTheme(localStorage.getItem('exported-theme') || (systemPrefersDark.matches ? 'dark' : 'light'));
+    var systemPrefersDark = false;
+    try {
+      if (window.matchMedia) {
+        systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+    } catch (e) {}
+
+    var storedTheme = safeStorage.getItem('exported-theme');
+    applyTheme(storedTheme || (systemPrefersDark ? 'dark' : 'light'));
 
     function onToggleTheme() {
-      applyTheme(document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+      var current = document.body.getAttribute('data-theme');
+      applyTheme(current === 'dark' ? 'light' : 'dark');
     }
-    const themeToggle = document.getElementById('theme-toggle');
-    const mobileThemeToggle = document.getElementById('mobile-theme-toggle');
+    var themeToggle = document.getElementById('theme-toggle');
+    var mobileThemeToggle = document.getElementById('mobile-theme-toggle');
     if (themeToggle) themeToggle.addEventListener('click', onToggleTheme);
     if (mobileThemeToggle) mobileThemeToggle.addEventListener('click', onToggleTheme);
 
     // --- Font Size ---
-    let currentFontSize = parseInt(localStorage.getItem('exported-font-size') || '16');
+    var currentFontSize = parseInt(safeStorage.getItem('exported-font-size') || '16', 10);
+    if (isNaN(currentFontSize)) currentFontSize = 16;
+
     function applyFontSize(size) {
       currentFontSize = Math.min(24, Math.max(12, size));
       document.documentElement.style.setProperty('--font-size-base', currentFontSize + 'px');
-      localStorage.setItem('exported-font-size', String(currentFontSize));
+      document.body.style.setProperty('--font-size-base', currentFontSize + 'px');
+      safeStorage.setItem('exported-font-size', String(currentFontSize));
     }
     applyFontSize(currentFontSize);
 
-    const fontIncrease = document.getElementById('font-increase');
-    const fontDecrease = document.getElementById('font-decrease');
-    const mobileFontIncrease = document.getElementById('mobile-font-increase');
-    const mobileFontDecrease = document.getElementById('mobile-font-decrease');
-    if (fontIncrease) fontIncrease.addEventListener('click', () => applyFontSize(currentFontSize + 1));
-    if (fontDecrease) fontDecrease.addEventListener('click', () => applyFontSize(currentFontSize - 1));
-    if (mobileFontIncrease) mobileFontIncrease.addEventListener('click', () => applyFontSize(currentFontSize + 1));
-    if (mobileFontDecrease) mobileFontDecrease.addEventListener('click', () => applyFontSize(currentFontSize - 1));
+    var fontIncrease = document.getElementById('font-increase');
+    var fontDecrease = document.getElementById('font-decrease');
+    var mobileFontIncrease = document.getElementById('mobile-font-increase');
+    var mobileFontDecrease = document.getElementById('mobile-font-decrease');
+    if (fontIncrease) fontIncrease.addEventListener('click', function() { applyFontSize(currentFontSize + 1); });
+    if (fontDecrease) fontDecrease.addEventListener('click', function() { applyFontSize(currentFontSize - 1); });
+    if (mobileFontIncrease) mobileFontIncrease.addEventListener('click', function() { applyFontSize(currentFontSize + 1); });
+    if (mobileFontDecrease) mobileFontDecrease.addEventListener('click', function() { applyFontSize(currentFontSize - 1); });
 
-    const menuToggle = document.getElementById('menu-toggle');
-    const sidebarOverlay = document.getElementById('sidebar-overlay');
-
+    // --- Sidebar State ---
     function isMobile() {
       return window.innerWidth <= 1024;
     }
@@ -2905,54 +3044,54 @@ export default function App() {
     function updateSidebarState(expanded) {
       if (expanded) {
         document.body.classList.add('sidebar-expanded');
-        localStorage.setItem('exported-sidebar-state', 'expanded');
+        safeStorage.setItem('exported-sidebar-state', 'expanded');
       } else {
         document.body.classList.remove('sidebar-expanded');
-        localStorage.setItem('exported-sidebar-state', 'collapsed');
+        safeStorage.setItem('exported-sidebar-state', 'collapsed');
       }
     }
 
-    // On first load: collapse on mobile, keep expanded on desktop
-    // Check localStorage for user preference, fall back to screen-based default
-    const storedSidebar = localStorage.getItem('exported-sidebar-state');
+    var storedSidebar = safeStorage.getItem('exported-sidebar-state');
     if (storedSidebar === 'expanded') {
       updateSidebarState(true);
     } else if (storedSidebar === 'collapsed') {
       updateSidebarState(false);
     } else {
-      // No stored preference: desktop=expanded, mobile=collapsed
       updateSidebarState(!isMobile());
     }
 
     function toggleSidebar() {
-      const isCurrentlyExpanded = document.body.classList.contains('sidebar-expanded');
+      var isCurrentlyExpanded = document.body.classList.contains('sidebar-expanded');
       updateSidebarState(!isCurrentlyExpanded);
     }
 
-    const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+    var sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+    var sidebarCloseBtn = document.getElementById('sidebar-close-btn');
+    var menuToggle = document.getElementById('menu-toggle');
+    var sidebarOverlay = document.getElementById('sidebar-overlay');
 
     if (sidebarToggleBtn) sidebarToggleBtn.addEventListener('click', toggleSidebar);
+    if (sidebarCloseBtn) sidebarCloseBtn.addEventListener('click', function() { updateSidebarState(false); });
     if (menuToggle) menuToggle.addEventListener('click', toggleSidebar);
-    if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
+    if (sidebarOverlay) sidebarOverlay.addEventListener('click', function() { updateSidebarState(false); });
 
-    const tocLinks = document.querySelectorAll('.toc-link');
-    tocLinks.forEach(link => {
-      link.addEventListener('click', () => {
-        // Auto-collapse sidebar after navigation on mobile
+    var tocLinks = document.querySelectorAll('.toc-link');
+    tocLinks.forEach(function(link) {
+      link.addEventListener('click', function() {
         if (isMobile()) {
           updateSidebarState(false);
         }
       });
     });
 
-    const headings = document.querySelectorAll('.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4, .markdown-body h5, .markdown-body h6');
-    const mobileTitleEl = document.getElementById('mobile-current-title');
+    var headings = document.querySelectorAll('.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4, .markdown-body h5, .markdown-body h6');
+    var mobileTitleEl = document.getElementById('mobile-current-title');
 
     function updateActiveHeading() {
-      let activeId = null;
-      const scrollPosition = window.scrollY + 120;
+      var activeId = null;
+      var scrollPosition = window.scrollY + 120;
       
-      headings.forEach((heading) => {
+      headings.forEach(function(heading) {
         if (heading.offsetTop <= scrollPosition) {
           activeId = heading.getAttribute('id');
         }
@@ -2962,18 +3101,18 @@ export default function App() {
         activeId = headings[0].getAttribute('id');
       }
 
-      tocLinks.forEach((link) => {
-        const linkId = link.getAttribute('data-id');
+      tocLinks.forEach(function(link) {
+        var linkId = link.getAttribute('data-id');
         if (linkId === activeId) {
           link.classList.add('active');
           if (mobileTitleEl) {
             mobileTitleEl.textContent = link.querySelector('.toc-text').textContent;
           }
-          const tocContainer = document.querySelector('.toc');
+          var tocContainer = document.querySelector('.toc');
           if (tocContainer) {
-            const linkTop = link.offsetTop;
-            const containerScrollTop = tocContainer.scrollTop;
-            const containerHeight = tocContainer.clientHeight;
+            var linkTop = link.offsetTop;
+            var containerScrollTop = tocContainer.scrollTop;
+            var containerHeight = tocContainer.clientHeight;
             if (linkTop < containerScrollTop || linkTop > (containerScrollTop + containerHeight - 50)) {
               tocContainer.scrollTo({
                 top: linkTop - containerHeight / 2,
@@ -2987,10 +3126,10 @@ export default function App() {
       });
     }
 
-    let scrollTimeout;
-    window.addEventListener('scroll', () => {
+    var scrollTimeout;
+    window.addEventListener('scroll', function() {
       if (!scrollTimeout) {
-        scrollTimeout = requestAnimationFrame(() => {
+        scrollTimeout = requestAnimationFrame(function() {
           updateActiveHeading();
           scrollTimeout = null;
         });
@@ -2998,6 +3137,7 @@ export default function App() {
     });
 
     updateActiveHeading();
+  })();
   </script>
   ${hasMermaidInExport ? `
   <!-- Mermaid -->

@@ -146,6 +146,12 @@
   margin-bottom: 0.25em;
 }
 
+.preview-prose li.task-list-item {
+  list-style-type: none !important;
+  padding-left: 0 !important;
+}
+
+
 .preview-prose blockquote {
   border-left: 4px solid #cbd5e1;
   padding-left: 1em;
