@@ -480,6 +480,295 @@ const fetchFontWithCache = async () => {
 
 // --- Mermaid & AI Copy Beautification Utilities ---
 
+// 1. Repair AI CLI artifacts (e.g. Claude Code terminal banners, fullwidth dividers, over-extended code blocks)
+const repairAIArtifacts = (text) => {
+  if (!text) return '';
+
+  // Remove Claude Code / terminal CLI warning banners
+  text = text.replace(/^[│|]?[ \t]*Diagram exceeds terminal width[^\n]*\n?/gmi, '');
+  text = text.replace(/^[│|]?[ \t]*Displayed as code block\. Widen terminal[^\n]*\n?/gmi, '');
+
+  // Convert box-drawing horizontal dividers (e.g. ──────) to standard markdown ---
+  text = text.replace(/^[ \t]*[─━═]{3,}[ \t]*$/gm, '---');
+
+  // Fix unclosed or over-extended fenced mermaid code blocks
+  const lines = text.split('\n');
+  const outLines = [];
+  let inCode = false;
+  let codeLang = '';
+  let codeHasMermaidStatements = false;
+  let swallowedBlock = false;
+  let swallowedIndent = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('```')) {
+      if (swallowedBlock) {
+        swallowedBlock = false;
+        swallowedIndent = 0;
+        continue; // Discard the orphaned closing fence
+      }
+
+      if (!inCode) {
+        inCode = true;
+        codeLang = trimmed.slice(3).trim().toLowerCase();
+        codeHasMermaidStatements = false;
+        outLines.push(line);
+      } else {
+        inCode = false;
+        codeLang = '';
+        codeHasMermaidStatements = false;
+        outLines.push(line);
+      }
+      continue;
+    }
+
+    if (inCode && (codeLang === 'mermaid' || codeLang === '')) {
+      if (/^(graph|flowchart|sequencediagram|classdiagram|statediagram|erdiagram|journey|gantt|pie|gitgraph|mindmap|timeline|quadrantchart|sankey-beta|zenuml)\b/i.test(trimmed) ||
+          /(-->|---|==>|\bparticipant\b|\bactor\b|\[".*"\])/.test(trimmed)) {
+        codeHasMermaidStatements = true;
+      }
+
+      const isMdHeading = /^#{1,6}\s+/.test(trimmed);
+      const isMdHr = /^---+$|^───+$/.test(trimmed);
+
+      if (codeHasMermaidStatements && (isMdHeading || isMdHr)) {
+        while (outLines.length && !outLines[outLines.length - 1].trim()) {
+          outLines.pop();
+        }
+        outLines.push('```');
+        outLines.push('');
+
+        inCode = false;
+        swallowedBlock = true;
+
+        const indentMatch = line.match(/^([ \t]+)/);
+        swallowedIndent = indentMatch ? indentMatch[1].length : 0;
+
+        const unindented = swallowedIndent > 0 && line.startsWith(' '.repeat(swallowedIndent))
+          ? line.slice(swallowedIndent)
+          : trimmed;
+        outLines.push(unindented);
+        continue;
+      }
+    }
+
+    if (swallowedBlock) {
+      let unindented = line;
+      if (swallowedIndent > 0) {
+        if (line.startsWith(' '.repeat(swallowedIndent))) {
+          unindented = line.slice(swallowedIndent);
+        } else if (/^[ \t]{1,4}/.test(line)) {
+          unindented = line.replace(/^[ \t]{1,4}/, '');
+        }
+      }
+      outLines.push(unindented);
+      continue;
+    }
+
+    outLines.push(line);
+  }
+
+  if (inCode && codeLang === 'mermaid') {
+    outLines.push('```');
+  }
+
+  return outLines.join('\n');
+};
+
+// 2. Parse a block of table lines into a GFM markdown table, merging multiline wrapped rows
+const parseTableBlock = (lines) => {
+  if (lines.length < 2) return null;
+
+  let sepIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim();
+    if (/^[─━═\-+┼|│\s]+$/.test(l) && (/[┼+]/.test(l) || (/[─━═\-]/.test(l) && /[|│]/.test(l)))) {
+      sepIdx = i;
+      break;
+    }
+  }
+
+  if (sepIdx <= 0) return null;
+
+  let headerLineIdx = sepIdx - 1;
+  while (headerLineIdx >= 0 && /^[┌┏╔─━═┬┳╦\s]+$/.test(lines[headerLineIdx].trim())) {
+    headerLineIdx--;
+  }
+  if (headerLineIdx < 0) return null;
+
+  const headerLine = lines[headerLineIdx];
+  const sepLine = lines[sepIdx];
+
+  const isBoxDrawing = /[│┃┼─]/.test(headerLine) || /[│┃┼─]/.test(sepLine);
+  const vSepRegex = isBoxDrawing ? /[│┃]/ : /[|]/;
+
+  const splitRow = (line) => line.split(vSepRegex).map(c => c.trim());
+
+  let headers = splitRow(headerLine);
+  const expectedColCount = headers.length;
+
+  const rawRows = [];
+  for (let i = sepIdx + 1; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (/^[└┗╚─━═┴┻╩\s]+$/.test(trimmed) || /^[├┣╠─━═┼╂┿\s]+$/.test(trimmed)) {
+      continue;
+    }
+
+    const parts = line.split(vSepRegex).map(c => c.trim());
+    if (parts.length === expectedColCount) {
+      rawRows.push(parts);
+    }
+  }
+
+  const prefixRegexes = [
+    /^[A-Z]型[：:]/,
+    /^[A-Z0-9一二三四五六七八九十]+[、.：:]/,
+    /^\d+[、.：:]/,
+    /^\[\d+\]/,
+    /^\(\d+\)/,
+    /^[A-Za-z][、.：:]/
+  ];
+
+  let matchedPrefixRegex = null;
+  if (rawRows.length > 0 && rawRows[0][0]) {
+    for (const r of prefixRegexes) {
+      if (r.test(rawRows[0][0])) {
+        matchedPrefixRegex = r;
+        break;
+      }
+    }
+  }
+
+  const logicalRows = [];
+  let currentRow = null;
+
+  for (let i = 0; i < rawRows.length; i++) {
+    const row = rawRows[i];
+    const col0 = row[0];
+
+    let isNewRow = false;
+    if (!currentRow) {
+      isNewRow = true;
+    } else if (matchedPrefixRegex && matchedPrefixRegex.test(col0)) {
+      isNewRow = true;
+    } else if (!matchedPrefixRegex) {
+      if (!col0) {
+        isNewRow = false;
+      } else if (currentRow._hadEmptyCol0) {
+        isNewRow = true;
+      } else {
+        const prevColLast = currentRow[expectedColCount - 1] || '';
+        const isPrevFinished = /[。！？!?）)」\s]$/.test(prevColLast) || !prevColLast;
+        if (isPrevFinished && !/^[()（）]/.test(col0) && !/^[a-z]/.test(col0)) {
+          isNewRow = true;
+        } else {
+          isNewRow = false;
+        }
+      }
+    } else {
+      isNewRow = false;
+    }
+
+    if (isNewRow) {
+      currentRow = row.map(c => c);
+      currentRow._hadEmptyCol0 = !col0;
+      logicalRows.push(currentRow);
+    } else {
+      if (!col0) currentRow._hadEmptyCol0 = true;
+      for (let c = 0; c < expectedColCount; c++) {
+        const piece = row[c];
+        if (!piece) continue;
+
+        if (!currentRow[c]) {
+          currentRow[c] = piece;
+        } else {
+          if (c === 0 && (/^[()（）]/.test(piece) || /型\(/.test(piece))) {
+            currentRow[c] += '<br>' + piece;
+          } else {
+            const lastChar = currentRow[c].slice(-1);
+            const firstChar = piece[0];
+            const isCJK = (ch) => /[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]/.test(ch);
+            if (isCJK(lastChar) && isCJK(firstChar)) {
+              currentRow[c] += piece;
+            } else if (/[\s]/.test(lastChar) || /[\s]/.test(firstChar)) {
+              currentRow[c] += piece;
+            } else if (/[.,;:!?'"）)」]/.test(lastChar) || /[.,;:!?'"（(「]/.test(firstChar)) {
+              currentRow[c] += piece;
+            } else if (/[a-zA-Z]/.test(lastChar) && /[a-zA-Z]/.test(firstChar)) {
+              currentRow[c] += ' ' + piece;
+            } else {
+              currentRow[c] += piece;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  const out = [];
+  out.push('| ' + headers.join(' | ') + ' |');
+  out.push('| ' + headers.map(() => '---').join(' | ') + ' |');
+  for (const r of logicalRows) {
+    const cleanCells = r.map(cell => (cell || '').replace(/\|/g, '\\|'));
+    out.push('| ' + cleanCells.join(' | ') + ' |');
+  }
+
+  return out.join('\n');
+};
+
+// 3. Convert all Unicode box-drawing or terminal tables into GFM Markdown tables
+const convertBoxTablesToGFM = (text) => {
+  if (!text) return '';
+  const lines = text.split('\n');
+  const result = [];
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    const isBoxSep = (l) => /^[─━═\-+┼|│\s]+$/.test(l) && (/[┼+]/.test(l) || (/[─━═\-]/.test(l) && /[|│]/.test(l)));
+    const hasColSep = (l) => /[│┃]/.test(l) || (/\|/.test(l) && !l.startsWith('| ---'));
+
+    if (i + 1 < lines.length && hasColSep(trimmed) && isBoxSep(lines[i + 1].trim())) {
+      const tableLines = [line, lines[i + 1]];
+      i += 2;
+      while (i < lines.length) {
+        const rowLine = lines[i];
+        const rowTrimmed = rowLine.trim();
+        if (!rowTrimmed) break;
+        if (/^#{1,6}\s+/.test(rowTrimmed) || (/^[─━═\-]{3,}$/.test(rowTrimmed) && !/[┼+]/.test(rowTrimmed))) {
+          break;
+        }
+        if (hasColSep(rowTrimmed) || /^[└┗╚─━═┴┻╩├┣╠┼╂┿\s]+$/.test(rowTrimmed)) {
+          tableLines.push(rowLine);
+          i++;
+        } else {
+          break;
+        }
+      }
+
+      const gfmTable = parseTableBlock(tableLines);
+      if (gfmTable) {
+        result.push(gfmTable);
+      } else {
+        result.push(...tableLines);
+      }
+      continue;
+    }
+
+    result.push(line);
+    i++;
+  }
+
+  return result.join('\n');
+};
+
 // Function to detect and wrap loose un-fenced mermaid blocks without mutating user's markdown
 const wrapLooseMermaid = (text) => {
   if (!text) return '';
@@ -579,10 +868,16 @@ const wrapLooseMermaid = (text) => {
 const cleanAndBeautifyText = (rawText) => {
   if (!rawText) return '';
 
-  // 1. Wrap loose mermaid blocks
-  let text = wrapLooseMermaid(rawText);
+  // 1. Repair AI CLI artifacts (unclosed mermaid blocks, terminal banners, divider lines)
+  let text = repairAIArtifacts(rawText);
 
-  // 2. Fix broken single-line file paths flanked by newlines into inline code `path/to/file.ext`
+  // 2. Convert Unicode box-drawing or terminal tables to standard GFM tables
+  text = convertBoxTablesToGFM(text);
+
+  // 3. Wrap loose un-fenced mermaid blocks
+  text = wrapLooseMermaid(text);
+
+  // 4. Fix broken single-line file paths flanked by newlines into inline code `path/to/file.ext`
   const fileExts = 'js|jsx|ts|tsx|vue|css|scss|sass|html|json|md|py|go|rs|java|c|cpp|h|sh|yml|yaml|sql|php|txt';
   const isolatedFileRegex = new RegExp(`(\\n[ \\t]*)([a-zA-Z0-9_\\-\\.\\/]+\\.(?:${fileExts}))([ \\t]*\\n)`, 'g');
   text = text.replace(isolatedFileRegex, ' `$2` ');
@@ -592,7 +887,7 @@ const cleanAndBeautifyText = (rawText) => {
   text = text.replace(/([^\n\r。！？：!?:#*>\-])[ \t]*\n[ \t]*(`[^`\n]+`)/g, '$1 $2');
   text = text.replace(/(`[^`\n]+`)[ \t]*\n[ \t]*([^\n\r#*>\-])/g, '$1 $2');
 
-  // 3. Process lines for headings and bullet points
+  // 5. Process lines for headings and bullet points
   const lines = text.split('\n');
   const cleanedLines = [];
   let inCode = false;
@@ -647,9 +942,9 @@ const cleanAndBeautifyText = (rawText) => {
       continue;
     }
 
-    // Key-value sub-items ending with colon: "前端未傳遞化名旗標：" (only at root level when not already indented)
-    const colonMatch = trimmed.match(/^([^#*>\-\d\s][^：:]{1,35})[：:]$/);
-    if (colonMatch && !trimmed.includes('http') && !trimmed.startsWith('```') && !indent) {
+    // Key-value sub-items ending with colon: "前端未傳遞化名旗標：" (only at root level when not already indented and not a table row)
+    const colonMatch = trimmed.match(/^([^#*>\-\d\s|][^：:]{1,35})[：:]$/);
+    if (colonMatch && !trimmed.includes('http') && !trimmed.startsWith('```') && !trimmed.startsWith('|') && !indent) {
       const keyName = colonMatch[1].trim();
       cleanedLines.push(`* **${keyName}**：`);
       continue;
@@ -665,11 +960,11 @@ const cleanAndBeautifyText = (rawText) => {
   return result.trim();
 };
 
-// Preprocess markdown before passing to marked to tolerate loose mermaid blocks
+// Preprocess markdown before passing to marked to tolerate loose mermaid blocks & box tables
 const parseMarkdownToHtml = (md) => {
   if (!md) return { html: '', readingHtml: '', rawFrontMatter: '' };
   const { markdown: cleanMd, metadata, rawFrontMatter } = parseFrontMatter(md);
-  const preprocessed = wrapLooseMermaid(cleanMd);
+  const preprocessed = wrapLooseMermaid(convertBoxTablesToGFM(repairAIArtifacts(cleanMd)));
   const parsedHTML = marked.parse(preprocessed);
   const sanitizedHTML = sanitizeHtml(parsedHTML);
   const metadataHtml = renderMetadataCard(metadata);
@@ -710,12 +1005,21 @@ const renderAllMermaidDiagrams = async (isDark) => {
       }
     });
 
-    const containers = document.querySelectorAll('.mermaid-diagram[data-code]');
+    const containers = document.querySelectorAll('.mermaid-diagram[data-code], .mermaid-wrapper[data-mermaid-code], .mermaid-wrapper[data-code]');
     for (let i = 0; i < containers.length; i++) {
       const container = containers[i];
-      const encodedCode = container.getAttribute('data-code');
+      const encodedCode = container.getAttribute('data-mermaid-code') || container.getAttribute('data-code');
       if (!encodedCode) continue;
-      const rawCode = decodeURIComponent(encodedCode).trim();
+      let rawCode = '';
+      try {
+        rawCode = decodeURIComponent(escape(window.atob(encodedCode))).trim();
+      } catch (e1) {
+        try {
+          rawCode = decodeURIComponent(encodedCode).trim();
+        } catch (e2) {
+          rawCode = encodedCode.trim();
+        }
+      }
       if (!rawCode) continue;
 
       mermaidRenderCounter++;
