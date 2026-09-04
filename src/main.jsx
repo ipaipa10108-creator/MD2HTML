@@ -15,6 +15,7 @@ if ('serviceWorker' in navigator && !import.meta.env.DEV) {
     // Register sw.js relative to the base URL
     navigator.serviceWorker.register('./sw.js')
       .then(reg => {
+        reg.update();
         console.log('Service Worker registered successfully:', reg.scope);
       })
       .catch(err => {
