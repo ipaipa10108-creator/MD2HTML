@@ -98,6 +98,86 @@
       - **Mermaid 區塊自動補全與提早閉合**：自動將未封閉或鬆散的 Mermaid 圖表程式碼補齊為標準圍欄代碼區塊，並能精確判斷非圖表內文提早結束圍欄，防止後續段落被吞入。
       - **完整歷史回溯**：智慧美化動作完整納入歷史佇列，隨時支援 `Ctrl + Z` 一鍵復原。
 
+14. **🌐 線上發布與分享（雙方案自由切換 ＋ 零知識端對端加密 ＋ 發布歷史備份）**
+    - **雙平台自由選擇（100% 免費、完全免綁信用卡）**：
+      - ☁️ **Cloudflare Workers KV 方案**：極速邊緣運算，隨機短網址（8 碼），隱私度高、秒級發布生效。
+      - 🐙 **GitHub REST API + GitHub Pages 方案**：純前端直連，免架設任何後端伺服器，自動推送到公開倉庫發布。
+      - 支援同時配置兩種方案，發布時可一鍵自由切換指定要使用哪一個服務！
+    - **零知識端對端密碼保護 (Client-Side AES-256-GCM)**：
+      - 支援為發布文件自訂閱讀密碼，採用瀏覽器原生 Web Crypto API（PBKDF2 100,000 次金鑰衍生與 AES-256-GCM 高強度加密）。
+      - 內容於瀏覽器本地加密後方上傳，伺服器與儲存庫僅保存密文；讀者打開短網址時直接在瀏覽器本地輸入密碼秒解密，無任何第三方窺探風險。
+      - **社群卡片公開預覽**：加密文件的 Open Graph 社群標籤（`og:title`、`og:description`）保持公開，在 LINE、Facebook、Messenger 等各類社群軟體分享時依然呈現精美預覽摘要卡片。
+    - **全方位分享與動態 QR Code**：
+      - 自動產生專屬短網址，支援呼叫系統原生分享 (Web Share API) 一鍵轉發至 LINE 或任何行動 App，亦可一鍵複製連結。
+      - 動態即時繪製高解析度 QR Code，方便手機掃描即刻閱讀。
+    - **本機發布歷史管理中心（支援備份匯出與匯入）**：
+      - 本地保存已發布文件的標題、短網址、提供者標籤與管理金鑰。
+      - 支援從遠端伺服器或 GitHub 倉庫一鍵下架刪除文件。
+      - **跨裝置無縫移轉**：提供「匯出 JSON」與「匯入 JSON（合併 / 覆蓋模式）」功能，更換手機或瀏覽器時輕鬆備份移轉所有發布紀錄與管理金鑰，不怕資料遺失。
+
+---
+
+### 🌐 線上發布與分享服務設定指南（100% 免費、完全免綁信用卡）
+
+MD2HTML 支援兩種完全免費且免綁信用卡的線上短網址發布服務，您可以依個人習慣選擇設定其中一種（或兩者皆設定）：
+
+#### 方案一：Cloudflare Workers KV（推薦：極速、隨機短網址）
+
+> [!NOTE]
+> Cloudflare 的 **Workers 基本運算** 與 **Workers KV（鍵值資料庫）** 在免費方案中**完全不需要綁定信用卡**！
+
+##### 🛠️ 新版 Cloudflare 控制台詳細設定步驟（約 2 分鐘，避坑指引）：
+
+1. **建立 KV 命名空間（資料庫）**：
+   - 進入 [Cloudflare 控制台](https://dash.cloudflare.com/)。
+   - 點擊左側選單的 **`Workers & Pages`**（在部分新版介面中位於 **`Storage & Databases`**）➔ 點選 **`KV`**。
+   - 點擊右上角藍色的 **`Create a namespace`** 按鈕。
+   - **Namespace Name** 輸入 **`MD_SHARES`** ➔ 點擊 **`Add`**。
+2. **建立 Worker 服務**：
+   - 點擊左側選單 **`Workers & Pages`** ➔ 點選 **`Create Application`** ➔ **`Create Worker`**。
+   - 命名為 `mdshares`（或任何您喜歡的名稱）➔ 點擊 **`Deploy`**。
+   - 點擊 **`Edit code`**，清空編輯器預設內容，將本專案 [`worker/worker.js`](file:///c:/Users/User/Desktop/@Antigravity/MD2HTML/MD2HTML/worker/worker.js) 的完整代碼複製貼上 ➔ 點擊右上角 **`Save and deploy`**。
+3. **重要關鍵！正確綁定 KV Namespace（避免常見錯誤）**：
+   - 回到該 Worker 的主頁面，看上方橫向選單列（在 `Deployments` 與 `Observability` 之間），點選 **`Bindings`** 標籤。
+     *(註：若為傳統舊版介面，則位於 `Settings` ➔ `Variables and Secrets` ➔ `KV Namespace Bindings`)*。
+   - 點擊 **`+ Add binding`**。
+   - 左側選擇 **`KV namespace`** ➔ 點擊右下角藍色 **`Add Binding`**。
+   - **Variable name（變數名稱）**：務必輸入大寫的 **`MY_KV`**（Worker 程式碼以此識別）。
+   - **KV namespace**：點擊下拉選單，選取第 1 步建立的 **`MD_SHARES`**。
+   - 點擊 **`Save and deploy`**（儲存並部署）。
+   > [!CAUTION]
+   > **避坑提醒**：千萬不要將 `MY_KV` 加在「Runtime variables and secrets」中的 `Text` 純文字變數！若誤設為 Text，Worker 會把 `MY_KV` 當成字串 `"MD_SHARES"`，執行時會出現 `env.MY_KV.put is not a function` 錯誤。務必確認是在 **`Bindings`** 標籤下綁定為真正的 **`KV namespace`**！
+4. **填入 MD2HTML 即可使用**：
+   - 複製您的 Worker 網址（例如 `https://mdshares.xxx.workers.dev`）。
+   - 在 MD2HTML 點擊頂部或選單中的「🌐 線上發布與分享」➔ 選擇「☁️ Cloudflare KV」➔ 貼上網址即可開始發布！
+
+---
+
+#### 方案二：GitHub REST API + GitHub Pages（免架伺服器，純前端發布）
+
+> [!NOTE]
+> 若不想註冊 Cloudflare，可直接使用現有的 GitHub 帳號，由 MD2HTML 前端自動透過 GitHub REST API 推送到您的專屬公開倉庫儲存與發布！
+
+##### 🛠️ 設定步驟（約 2 分鐘）：
+
+1. **建立分享專用倉庫**：
+   - 登入 GitHub ➔ 點擊右上角 **+** ➔ **New repository**。
+   - 倉庫名稱輸入 `html-shares`（若改用其他名稱，後續在 MD2HTML 設定中對應填寫即可）。
+   - 務必選擇 **Public（公開）**，並勾選 **Add a README file** ➔ 點擊 **Create repository**。
+2. **開啟 GitHub Pages 託管**：
+   - 進入該倉庫的 **Settings** ➔ 點選左側 **Pages**。
+   - 在 **Build and deployment** ➔ **Branch** 下拉選單選擇 **`main`**，資料夾維持 **`/ (root)`** ➔ 點擊 **Save**。
+3. **建立 GitHub Personal Access Token (PAT)**：
+   - 點擊 GitHub 右上角個人頭像 ➔ **Settings** ➔ 滑到最下方點選 **Developer Settings**。
+   - 選擇 **Personal access tokens** ➔ **Fine-grained tokens**（或 Tokens (classic)）➔ 點擊 **Generate new token**。
+   - Token 名稱填寫 `MD2HTML Publish`，過期時間建議選擇最長或自訂。
+   - **Repository access**：選擇 **Only select repositories**，選取剛建立的 `html-shares` 倉庫。
+   - **Permissions**：找到 **Repository permissions** ➔ 將 **Contents** 權限設為 **Read and write**（讀取與寫入）。
+   - 點擊 **Generate token**，並複製產生的 Token（格式通常為 `github_pat_...`）。
+4. **填入 MD2HTML 即可使用**：
+   - 在 MD2HTML 點擊「🌐 線上發布與分享」➔ 點選「🐙 GitHub Pages」。
+   - 系統會自動辨識並帶入您的 GitHub 使用者名稱（亦可手動填寫），貼上剛剛複製的 Token 與倉庫名稱，即可開始發布！
+
 ---
 
 ### 📦 安裝與本地開發
@@ -238,6 +318,86 @@ Welcome to the **Universal Markdown Editor Converter**! A visually stunning, hig
       - **List Item Formatting**: Formats key lines ending in colons into crisp bold bullet points (`* **Key**:`).
       - **Mermaid Fence Enclosure & Early Closing**: Automatically wraps un-fenced Mermaid definitions in ```` ```mermaid ```` code blocks and detects non-diagram text to close fences early.
       - **Undo Support**: Integrated with the history stack, enabling full `Ctrl + Z` undo capability.
+
+14. **🌐 Online Publishing & Universal Sharing (Dual-Provider + Zero-Knowledge Client-Side Encryption + Local History Backup)**
+    - **Dual Free Providers (100% Free, Zero Credit Card Required)**:
+      - ☁️ **Cloudflare Workers KV**: Instant global edge distribution, 8-character random short URLs, lightning-fast rendering.
+      - 🐙 **GitHub REST API + GitHub Pages**: 100% serverless, direct client-side publishing pushing directly to your public repository.
+      - Configure either or both providers; seamlessly switch between them directly on the publishing dialog!
+    - **Zero-Knowledge Client-Side Password Protection (AES-256-GCM)**:
+      - Protect published articles with a password using the browser's native Web Crypto API (PBKDF2 with 100,000 iterations & AES-256-GCM encryption).
+      - Document content is encrypted locally on your device before uploading. Neither Cloudflare nor GitHub can see the plaintext. Readers decrypt in their browser in milliseconds upon password entry.
+      - **Public Social Cards (Open Graph)**: Essential metadata tags (`og:title`, `og:description`) remain unencrypted, allowing LINE, Facebook, and Messenger to render rich snippet cards even for password-protected posts.
+    - **Universal Sharing & Dynamic QR Code**:
+      - One-click copy for custom short URLs; invokes the native Web Share API to send links straight to LINE, WhatsApp, or any mobile messaging app.
+      - Dynamically renders high-resolution QR codes for immediate mobile camera scanning.
+    - **Local Publishing History & Cloud Deletion**:
+      - Stores published article history, provider tags, creation timestamps, and management secret tokens in `localStorage`.
+      - Delete or take down published files from Cloudflare KV or GitHub Pages with a single click.
+      - **JSON Export & Import (Merge / Replace)**: Easily backup and restore your publishing history and deletion keys across different mobile devices or browsers!
+
+---
+
+### 🌐 Online Publishing Setup Guide (100% Free & No Credit Card Needed)
+
+MD2HTML supports two free publishing channels. You may configure either one or both based on your workflow:
+
+#### Option 1: Cloudflare Workers KV (Recommended: Ultra-Fast, Random Short URLs)
+
+> [!NOTE]
+> Cloudflare's **Workers free tier** and **Workers KV** require **NO credit card verification**!
+
+##### 🛠️ Setup Steps for the Modern Cloudflare Dashboard (Takes ~2 minutes):
+
+1. **Create a KV Namespace**:
+   - Log in to your [Cloudflare Dashboard](https://dash.cloudflare.com/).
+   - In the left sidebar, navigate to **`Workers & Pages`** (or **`Storage & Databases`**) ➔ **`KV`**.
+   - Click the blue **`Create a namespace`** button.
+   - Enter **`MD_SHARES`** as the Namespace Name ➔ Click **`Add`**.
+2. **Create the Worker**:
+   - In the left sidebar, go to **`Workers & Pages`** ➔ **`Create Application`** ➔ **`Create Worker`**.
+   - Name it `mdshares` (or any preferred name) ➔ Click **`Deploy`**.
+   - Click **`Edit code`**, clear the default template, and copy-paste the entire code from [`worker/worker.js`](file:///c:/Users/User/Desktop/@Antigravity/MD2HTML/MD2HTML/worker/worker.js) ➔ Click **`Save and deploy`**.
+3. **Crucial Step: Correctly Bind the KV Namespace**:
+   - Go back to the Worker's main page. In the top navigation bar (between `Deployments` and `Observability`), click the **`Bindings`** tab.
+     *(Note: in older dashboard layouts, this is under `Settings` ➔ `Variables and Secrets` ➔ `KV Namespace Bindings`)*.
+   - Click **`+ Add binding`**.
+   - Select **`KV namespace`** on the left ➔ Click the blue **`Add Binding`** button.
+   - **Variable name**: Enter **`MY_KV`** in all uppercase (matching the code identifier).
+   - **KV namespace**: Open the dropdown and select **`MD_SHARES`** created in Step 1.
+   - Click **`Save and deploy`**.
+   > [!CAUTION]
+   > **Common Pitfall**: Do NOT add `MY_KV` as a `Text` variable under "Runtime variables and secrets"! If configured as Text, the Worker treats `MY_KV` as a raw string `"MD_SHARES"`, causing runtime errors like `env.MY_KV.put is not a function`. It MUST be bound under **`Bindings`** as a **`KV namespace`**!
+4. **Enter into MD2HTML**:
+   - Copy your Worker URL (e.g. `https://mdshares.xxx.workers.dev`).
+   - In MD2HTML, click **"🌐 Online Publishing & Sharing"** in the top bar or menu ➔ Select **`Cloudflare KV`** ➔ Paste the Worker URL to publish!
+
+---
+
+#### Option 2: GitHub REST API + GitHub Pages (100% Serverless)
+
+> [!NOTE]
+> If you prefer not to use Cloudflare, publish directly using your GitHub account! MD2HTML commits HTML files directly to your public repository via GitHub's REST API.
+
+##### 🛠️ Setup Steps (~2 minutes):
+
+1. **Create a Dedicated Sharing Repository**:
+   - On GitHub, click **+** ➔ **New repository**.
+   - Name the repository `html-shares`.
+   - Ensure it is set to **Public** and check **Add a README file** ➔ Click **Create repository**.
+2. **Enable GitHub Pages**:
+   - In the repository, go to **Settings** ➔ **Pages**.
+   - Under **Build and deployment** ➔ **Branch**, select **`main`** with folder **`/ (root)`** ➔ Click **Save**.
+3. **Generate a GitHub Personal Access Token (PAT)**:
+   - Click your profile icon ➔ **Settings** ➔ scroll down to **Developer Settings**.
+   - Select **Personal access tokens** ➔ **Fine-grained tokens** ➔ Click **Generate new token**.
+   - Name: `MD2HTML Publish`.
+   - **Repository access**: Select **Only select repositories** ➔ pick `html-shares`.
+   - **Permissions**: Under **Repository permissions**, set **Contents** to **Read and write**.
+   - Click **Generate token** and copy the generated token string (`github_pat_...`).
+4. **Enter into MD2HTML**:
+   - In MD2HTML, click **"🌐 Online Publishing & Sharing"** ➔ Select **`GitHub Pages`**.
+   - Your username will be auto-detected (or entered manually). Paste the token and repository name to start publishing!
 
 ---
 
