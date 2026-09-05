@@ -1,6 +1,6 @@
 /**
- * Cloudflare Worker for MD2HTML Online Publishing (Plan B)
- * Handles uploading HTML to Cloudflare R2, generating short URLs, serving HTML, and deletion via secret tokens.
+ * Cloudflare Worker for MD2HTML Online Publishing (Workers KV - 100% Free & No Credit Card Required)
+ * Handles uploading HTML to Cloudflare Workers KV, serving HTML, and deletion via secret tokens.
  */
 
 // Generate random URL-safe ID (8 characters)
@@ -57,10 +57,10 @@ export default {
     }
 
     try {
-      // 1. POST /api/upload: Upload HTML file
+      // 1. POST /api/upload: Upload HTML file to Workers KV
       if (request.method === 'POST' && pathname === '/api/upload') {
-        if (!env.DOCS_BUCKET) {
-          return jsonResponse({ error: 'R2 儲存桶未設定 (DOCS_BUCKET 未綁定)' }, 500);
+        if (!env.MY_KV) {
+          return jsonResponse({ error: 'Workers KV 未綁定 (請在 Worker 設定綁定 MY_KV Namespace)' }, 500);
         }
 
         const body = await request.json().catch(() => null);
@@ -70,18 +70,14 @@ export default {
 
         const id = generateRandomId(8);
         const secret = generateSecretToken();
-        const key = `doc-${id}.html`;
         const createdAt = new Date().toISOString();
 
-        // Save HTML to R2
-        await env.DOCS_BUCKET.put(key, body.html, {
-          httpMetadata: {
-            contentType: 'text/html; charset=utf-8',
-          },
-          customMetadata: {
+        // Save HTML to Workers KV with metadata
+        await env.MY_KV.put(id, body.html, {
+          metadata: {
             secret,
-            title: encodeURIComponent(body.title || 'Markdown 文件'),
-            isEncrypted: String(Boolean(body.isEncrypted)),
+            title: body.title || 'Markdown 文件',
+            isEncrypted: Boolean(body.isEncrypted),
             createdAt,
           },
         });
@@ -93,14 +89,15 @@ export default {
           id,
           url: shareUrl,
           secret,
+          provider: 'cloudflare',
           createdAt,
         });
       }
 
       // 2. DELETE /api/:id: Delete file with Secret Token
       if (request.method === 'DELETE' && pathname.startsWith('/api/')) {
-        if (!env.DOCS_BUCKET) {
-          return jsonResponse({ error: 'R2 儲存桶未設定' }, 500);
+        if (!env.MY_KV) {
+          return jsonResponse({ error: 'Workers KV 未綁定' }, 500);
         }
 
         const id = pathname.replace('/api/', '').trim();
@@ -116,35 +113,32 @@ export default {
           return jsonResponse({ error: '未授權：缺少管理金鑰 (Secret Token)' }, 401);
         }
 
-        const key = `doc-${id}.html`;
-        const obj = await env.DOCS_BUCKET.head(key);
-        if (!obj) {
+        const { metadata } = await env.MY_KV.getWithMetadata(id);
+        if (!metadata) {
           return jsonResponse({ error: '文件不存在或已下架' }, 404);
         }
 
-        const storedSecret = obj.customMetadata ? obj.customMetadata.secret : null;
-        if (storedSecret !== providedSecret) {
+        if (metadata.secret !== providedSecret) {
           return jsonResponse({ error: '驗證失敗：管理金鑰不符，無權刪除' }, 403);
         }
 
-        await env.DOCS_BUCKET.delete(key);
+        await env.MY_KV.delete(id);
         return jsonResponse({
           success: true,
           message: '文件已成功從伺服器下架刪除！',
         });
       }
 
-      // 3. GET /:id: Serve HTML document
+      // 3. GET /:id: Serve HTML document from Workers KV
       if (request.method === 'GET' && pathname.length > 1 && !pathname.startsWith('/api/')) {
-        if (!env.DOCS_BUCKET) {
-          return new Response('Server configuration error: DOCS_BUCKET not bound', { status: 500 });
+        if (!env.MY_KV) {
+          return new Response('Server configuration error: MY_KV not bound', { status: 500 });
         }
 
         const id = pathname.substring(1).trim();
-        const key = `doc-${id}.html`;
+        const html = await env.MY_KV.get(id);
 
-        const obj = await env.DOCS_BUCKET.get(key);
-        if (!obj) {
+        if (!html) {
           // Render elegant 404 Page
           const notFoundHtml = `<!DOCTYPE html>
 <html lang="zh-Hant">
@@ -197,18 +191,19 @@ export default {
           });
         }
 
-        // Return HTML file
-        const headers = new Headers();
-        headers.set('Content-Type', 'text/html; charset=utf-8');
-        headers.set('X-Robots-Tag', 'noindex, nofollow');
-        headers.set('Cache-Control', 'public, max-age=60');
-
-        return new Response(obj.body, { headers });
+        // Return HTML
+        return new Response(html, {
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'X-Robots-Tag': 'noindex, nofollow',
+            'Cache-Control': 'public, max-age=1800',
+          },
+        });
       }
 
       // Root endpoint
       if (pathname === '/' || pathname === '') {
-        return new Response('MD2HTML Cloudflare Worker Publishing Service is running.', {
+        return new Response('MD2HTML Cloudflare Workers KV Publishing Service is running.', {
           status: 200,
           headers: { 'Content-Type': 'text/plain; charset=utf-8', ...getCorsHeaders() },
         });

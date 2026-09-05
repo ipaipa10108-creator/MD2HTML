@@ -5,7 +5,9 @@ import {
   exportPublishHistory,
   importPublishHistory,
   deleteFromWorker,
-  getSavedWorkerUrl
+  getSavedWorkerUrl,
+  deleteFromGitHub,
+  getSavedGitHubConfig
 } from '../utils/publishService';
 
 export default function PublishHistoryModal({ isOpen, onClose, showToast }) {
@@ -29,7 +31,8 @@ function PublishHistoryModalContent({ onClose, showToast }) {
     const q = searchQuery.toLowerCase();
     return (
       (item.title && item.title.toLowerCase().includes(q)) ||
-      (item.url && item.url.toLowerCase().includes(q))
+      (item.url && item.url.toLowerCase().includes(q)) ||
+      (item.provider && item.provider.toLowerCase().includes(q))
     );
   });
 
@@ -41,26 +44,49 @@ function PublishHistoryModalContent({ onClose, showToast }) {
     });
   };
 
-  // Takedown / Delete handler
+  // Takedown / Delete handler supporting both Cloudflare and GitHub
   const handleDelete = async (item) => {
-    const confirmDelete = window.confirm(`確定要從雲端刪除下架《${item.title}》嗎？\n\n刪除後該網址將立即失效無法存取。`);
+    const isGitHub = item.provider === 'github';
+    const providerName = isGitHub ? 'GitHub Pages' : 'Cloudflare Workers KV';
+
+    const confirmDelete = window.confirm(`確定要從 ${providerName} 刪除下架《${item.title}》嗎？\n\n刪除後該網址將立即失效無法存取。`);
     if (!confirmDelete) return;
 
     setDeletingId(item.id);
-    showToast('⏳ 正在從伺服器下架刪除文件...', 'info');
+    showToast(`⏳ 正在從 ${providerName} 下架刪除文件...`, 'info');
 
-    const workerUrl = getSavedWorkerUrl();
     try {
-      if (workerUrl && item.secret) {
-        await deleteFromWorker(workerUrl, item.id, item.secret);
+      if (isGitHub) {
+        const ghConfig = getSavedGitHubConfig();
+        const token = ghConfig.token;
+        const owner = item.owner || ghConfig.owner;
+        const repo = item.repo || ghConfig.repo || 'html-shares';
+        const path = item.path || `${item.id}.html`;
+
+        if (!token || !owner) {
+          throw new Error('未偵測到有效的 GitHub Token 或帳號資訊，請至設定中補齊！');
+        }
+
+        await deleteFromGitHub({
+          token,
+          owner,
+          repo,
+          path,
+          sha: item.sha
+        });
+      } else {
+        const workerUrl = getSavedWorkerUrl();
+        if (workerUrl && item.secret) {
+          await deleteFromWorker(workerUrl, item.id, item.secret);
+        }
       }
+
       removePublishHistoryItem(item.id);
       refreshHistory();
-      showToast(`✅ 《${item.title}》已成功從雲端與本地下架刪除！`, 'success');
+      showToast(`✅ 《${item.title}》已成功從 ${providerName} 下架刪除！`, 'success');
     } catch (err) {
-      console.warn('Delete from worker failed:', err);
-      // Even if worker delete failed (e.g. invalid url or already gone), offer to remove from local
-      const removeLocal = window.confirm(`伺服器下架回報：${err.message}\n\n是否仍要從本機記錄中移除此項目？`);
+      console.warn('Delete failed:', err);
+      const removeLocal = window.confirm(`雲端回報：${err.message}\n\n是否仍要從本機記錄中移除此項目？`);
       if (removeLocal) {
         removePublishHistoryItem(item.id);
         refreshHistory();
@@ -99,7 +125,7 @@ function PublishHistoryModalContent({ onClose, showToast }) {
       try {
         const text = event.target.result;
         const parsed = JSON.parse(text);
-        let items = [];
+        let items;
         if (Array.isArray(parsed)) {
           items = parsed;
         } else if (parsed && Array.isArray(parsed.history)) {
@@ -163,7 +189,7 @@ function PublishHistoryModalContent({ onClose, showToast }) {
                 本機發布歷史管理
               </h3>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                管理已發布的短網址與刪除金鑰，支援匯出/匯入跨裝置移轉
+                管理已發布的短網址與刪除金鑰，支援 Cloudflare KV 與 GitHub Pages 跨裝置匯出/匯入
               </p>
             </div>
           </div>
@@ -206,7 +232,7 @@ function PublishHistoryModalContent({ onClose, showToast }) {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="搜尋標題或網址..."
+              placeholder="搜尋標題、網址或平台..."
               className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
             />
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
@@ -272,6 +298,7 @@ function PublishHistoryModalContent({ onClose, showToast }) {
                 : '未知時間';
 
               const isDeleting = deletingId === item.id;
+              const isGitHub = item.provider === 'github';
 
               return (
                 <div
@@ -281,6 +308,16 @@ function PublishHistoryModalContent({ onClose, showToast }) {
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Provider Badge */}
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                          isGitHub
+                            ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200/60 dark:border-purple-800/60'
+                            : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200/60 dark:border-blue-800/60'
+                        }`}>
+                          {isGitHub ? '🐙 GitHub' : '☁️ CF KV'}
+                        </span>
+
+                        {/* Encrypted Badge */}
                         {item.isEncrypted ? (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
                             🔒 密碼保護
@@ -290,6 +327,7 @@ function PublishHistoryModalContent({ onClose, showToast }) {
                             🌐 公開
                           </span>
                         )}
+
                         <h4 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100 truncate">
                           {item.title}
                         </h4>
@@ -346,7 +384,7 @@ function PublishHistoryModalContent({ onClose, showToast }) {
         {/* Modal Footer */}
         <div className="px-5 py-3 border-t border-slate-200/70 dark:border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-950/30">
           <span className="text-[11px] text-slate-400">
-            共 {history.length} 筆發布記錄（資料保存在手機/瀏覽器本地）
+            共 {history.length} 筆發布記錄（資料保存在本機瀏覽器）
           </span>
           <button
             onClick={onClose}

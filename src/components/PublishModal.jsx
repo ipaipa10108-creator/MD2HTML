@@ -3,7 +3,12 @@ import { buildPublishableHTML } from '../utils/crypto';
 import {
   getSavedWorkerUrl,
   saveWorkerUrl,
+  getSavedGitHubConfig,
+  saveGitHubConfig,
+  getActiveProvider,
+  saveActiveProvider,
   uploadToWorker,
+  uploadToGitHub,
   savePublishHistoryItem
 } from '../utils/publishService';
 
@@ -57,11 +62,28 @@ function PublishModalContent({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
+  // Provider Selection: 'cloudflare' | 'github'
+  const [provider, setProvider] = useState(() => getActiveProvider());
+
+  // Cloudflare KV Config
   const [workerUrl, setWorkerUrlState] = useState(() => getSavedWorkerUrl());
-  const [showServerConfig, setShowServerConfig] = useState(() => !getSavedWorkerUrl());
+  const [showCfConfig, setShowCfConfig] = useState(() => !getSavedWorkerUrl());
+
+  // GitHub Pages Config
+  const [githubConfig, setGithubConfig] = useState(() => getSavedGitHubConfig());
+  const [showGhToken, setShowGhToken] = useState(false);
+  const [showGhConfig, setShowGhConfig] = useState(() => !getSavedGitHubConfig().token);
 
   const [isPublishing, setIsPublishing] = useState(false);
-  const [publishedResult, setPublishedResult] = useState(null); // { url, id, secret, password }
+  const [publishedResult, setPublishedResult] = useState(null); // { url, id, secret, provider, ... }
+
+  const handleProviderSwitch = (newProvider) => {
+    setProvider(newProvider);
+    saveActiveProvider(newProvider);
+  };
+
+  const isCfReady = Boolean(workerUrl.trim());
+  const isGhReady = Boolean(githubConfig.token.trim() && githubConfig.owner.trim());
 
   // Extract headings and article HTML
   const generateExportData = () => {
@@ -89,24 +111,35 @@ function PublishModalContent({
   const handlePublish = async (e) => {
     e.preventDefault();
 
-    const targetWorkerUrl = workerUrl.trim();
-    if (!targetWorkerUrl) {
-      showToast('⚠️ 請先填寫線上發布伺服器 (Worker) 網址！', 'warning');
-      setShowServerConfig(true);
-      return;
-    }
-
     if (isEncrypted && !password.trim()) {
       showToast('⚠️ 您啟用了密碼保護，請輸入閱讀密碼！', 'warning');
       return;
     }
 
+    if (provider === 'cloudflare') {
+      const targetWorkerUrl = workerUrl.trim();
+      if (!targetWorkerUrl) {
+        showToast('⚠️ 請先填寫 Cloudflare Worker 網址！', 'warning');
+        setShowCfConfig(true);
+        return;
+      }
+    } else if (provider === 'github') {
+      if (!githubConfig.token.trim() || !githubConfig.owner.trim()) {
+        showToast('⚠️ 請先填寫 GitHub Token 與使用者名稱！', 'warning');
+        setShowGhConfig(true);
+        return;
+      }
+    }
+
     setIsPublishing(true);
-    showToast('⏳ 正在打包並發布至雲端...', 'info');
+    showToast(
+      provider === 'cloudflare'
+        ? '⏳ 正在發布至 Cloudflare Workers KV...'
+        : '⏳ 正在透過 GitHub API 推送至 GitHub Pages...',
+      'info'
+    );
 
     try {
-      saveWorkerUrl(targetWorkerUrl);
-
       const { articleContentHtml, exportedHeadings } = generateExportData();
       const hasMermaid = markdown.includes('```mermaid');
 
@@ -121,13 +154,28 @@ function PublishModalContent({
         hasMermaid
       });
 
-      // Upload to Cloudflare Worker
-      const result = await uploadToWorker(targetWorkerUrl, {
-        html: fullHtml,
-        title: title.trim() || 'Markdown 文件分享',
-        description: description.trim(),
-        isEncrypted
-      });
+      let result;
+
+      if (provider === 'cloudflare') {
+        saveWorkerUrl(workerUrl.trim());
+        result = await uploadToWorker(workerUrl.trim(), {
+          html: fullHtml,
+          title: title.trim() || 'Markdown 文件分享',
+          description: description.trim(),
+          isEncrypted
+        });
+      } else {
+        saveGitHubConfig(githubConfig);
+        result = await uploadToGitHub({
+          token: githubConfig.token.trim(),
+          owner: githubConfig.owner.trim(),
+          repo: githubConfig.repo.trim() || 'html-shares',
+          html: fullHtml,
+          title: title.trim() || 'Markdown 文件分享',
+          description: description.trim(),
+          isEncrypted
+        });
+      }
 
       // Save to local publishing history
       const historyItem = {
@@ -136,7 +184,12 @@ function PublishModalContent({
         title: title.trim() || 'Markdown 文件分享',
         description: description.trim(),
         isEncrypted,
-        secret: result.secret,
+        provider,
+        secret: result.secret || null,
+        sha: result.sha || null,
+        path: result.path || null,
+        owner: result.owner || null,
+        repo: result.repo || null,
         createdAt: result.createdAt || new Date().toISOString(),
         password: isEncrypted ? password.trim() : ''
       };
@@ -145,7 +198,8 @@ function PublishModalContent({
       setPublishedResult({
         ...result,
         title: historyItem.title,
-        password: historyItem.password
+        password: historyItem.password,
+        provider
       });
 
       showToast('🎉 線上發布成功！可直接複製或分享至其他 App', 'success');
@@ -207,7 +261,7 @@ function PublishModalContent({
                 線上發布與分享
               </h3>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                產生專屬短網址，可選密碼保護，流暢分享至各通訊與社群 App
+                100% 完全免費、免綁信用卡，短網址與卡片預覽分享至各 App
               </p>
             </div>
           </div>
@@ -223,10 +277,51 @@ function PublishModalContent({
         </div>
 
         {/* Modal Body */}
-        <div className="p-5 sm:p-6 overflow-y-auto max-h-[calc(92vh-130px)] space-y-5">
+        <div className="p-5 sm:p-6 overflow-y-auto max-h-[calc(92vh-130px)] space-y-4">
           {!publishedResult ? (
             /* --- Form View --- */
             <form onSubmit={handlePublish} className="space-y-4">
+              
+              {/* Provider Selection Tabs */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  ⚡ 選擇發布服務平台（兩者皆免信用卡）
+                </label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800/70 rounded-xl border border-slate-200/70 dark:border-slate-700/60">
+                  <button
+                    type="button"
+                    onClick={() => handleProviderSwitch('cloudflare')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex flex-col items-center justify-center gap-0.5 ${
+                      provider === 'cloudflare'
+                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>☁️ Cloudflare KV</span>
+                      <span className={`w-2 h-2 rounded-full ${isCfReady ? 'bg-emerald-500' : 'bg-amber-400'}`} title={isCfReady ? '已設定' : '未設定'} />
+                    </div>
+                    <span className="text-[10px] font-normal text-slate-400">極速秒出 · 高隱私</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleProviderSwitch('github')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex flex-col items-center justify-center gap-0.5 ${
+                      provider === 'github'
+                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>🐙 GitHub Pages</span>
+                      <span className={`w-2 h-2 rounded-full ${isGhReady ? 'bg-emerald-500' : 'bg-amber-400'}`} title={isGhReady ? '已設定' : '未設定'} />
+                    </div>
+                    <span className="text-[10px] font-normal text-slate-400">免架後端 · 純前端</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Link Preview Card */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
@@ -310,40 +405,114 @@ function PublishModalContent({
                 )}
               </div>
 
-              {/* Server Endpoint Config (Accordion) */}
-              <div className="border border-slate-200/60 dark:border-slate-800/60 rounded-xl overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setShowServerConfig(!showServerConfig)}
-                  className="w-full px-3.5 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 bg-slate-50/40 dark:bg-slate-900/40 hover:bg-slate-100/50 flex items-center justify-between"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <span>⚙️</span>
-                    <span>發布伺服器設定 {workerUrl ? '✅' : '（尚未設定）'}</span>
-                  </span>
-                  <span className="text-[10px] text-indigo-500">
-                    {showServerConfig ? '收合 ▲' : '展開設定 ▼'}
-                  </span>
-                </button>
+              {/* Provider Config Section (Cloudflare KV vs GitHub Pages) */}
+              {provider === 'cloudflare' ? (
+                <div className="border border-slate-200/60 dark:border-slate-800/60 rounded-xl overflow-hidden animate-fade-in">
+                  <button
+                    type="button"
+                    onClick={() => setShowCfConfig(!showCfConfig)}
+                    className="w-full px-3.5 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 bg-slate-50/40 dark:bg-slate-900/40 hover:bg-slate-100/50 flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span>⚙️</span>
+                      <span>Cloudflare Workers KV 網址設定 {isCfReady ? '✅' : '（尚未填寫）'}</span>
+                    </span>
+                    <span className="text-[10px] text-indigo-500">
+                      {showCfConfig ? '收合 ▲' : '展開設定 ▼'}
+                    </span>
+                  </button>
 
-                {showServerConfig && (
-                  <div className="p-3.5 space-y-2 bg-white dark:bg-slate-900 border-t border-slate-200/60 dark:border-slate-800/60">
-                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                      Cloudflare Worker 網址
-                    </label>
-                    <input
-                      type="url"
-                      value={workerUrl}
-                      onChange={(e) => setWorkerUrlState(e.target.value)}
-                      placeholder="https://your-worker.workers.dev"
-                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
-                    />
-                    <p className="text-[10px] text-slate-400 leading-relaxed">
-                      填入您部署的 Worker 網址或自訂域名，發布時檔案將安全存入您自己的 R2 儲存槽。
-                    </p>
-                  </div>
-                )}
-              </div>
+                  {showCfConfig && (
+                    <div className="p-3.5 space-y-2 bg-white dark:bg-slate-900 border-t border-slate-200/60 dark:border-slate-800/60">
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                        Worker 伺服器網址
+                      </label>
+                      <input
+                        type="url"
+                        value={workerUrl}
+                        onChange={(e) => setWorkerUrlState(e.target.value)}
+                        placeholder="https://your-worker.workers.dev"
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+                      />
+                      <p className="text-[10px] text-slate-400 leading-relaxed">
+                        完全免費、免綁信用卡！至 Cloudflare 建立 Worker 並綁定 KV 命名空間 <code className="text-indigo-400">MY_KV</code> 即可。
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="border border-slate-200/60 dark:border-slate-800/60 rounded-xl overflow-hidden animate-fade-in">
+                  <button
+                    type="button"
+                    onClick={() => setShowGhConfig(!showGhConfig)}
+                    className="w-full px-3.5 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 bg-slate-50/40 dark:bg-slate-900/40 hover:bg-slate-100/50 flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span>⚙️</span>
+                      <span>GitHub Pages 倉庫設定 {isGhReady ? '✅' : '（尚未填寫）'}</span>
+                    </span>
+                    <span className="text-[10px] text-indigo-500">
+                      {showGhConfig ? '收合 ▲' : '展開設定 ▼'}
+                    </span>
+                  </button>
+
+                  {showGhConfig && (
+                    <div className="p-3.5 space-y-3 bg-white dark:bg-slate-900 border-t border-slate-200/60 dark:border-slate-800/60">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            GitHub 帳號 (Owner)
+                          </label>
+                          <input
+                            type="text"
+                            value={githubConfig.owner}
+                            onChange={(e) => setGithubConfig({ ...githubConfig, owner: e.target.value })}
+                            placeholder="如: octocat"
+                            className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            公開倉庫 (Repo)
+                          </label>
+                          <input
+                            type="text"
+                            value={githubConfig.repo}
+                            onChange={(e) => setGithubConfig({ ...githubConfig, repo: e.target.value })}
+                            placeholder="html-shares"
+                            className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                            GitHub Personal Access Token (PAT)
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowGhToken(!showGhToken)}
+                            className="text-[10px] text-indigo-500 hover:underline"
+                          >
+                            {showGhToken ? '隱藏' : '顯示'}
+                          </button>
+                        </div>
+                        <input
+                          type={showGhToken ? 'text' : 'password'}
+                          value={githubConfig.token}
+                          onChange={(e) => setGithubConfig({ ...githubConfig, token: e.target.value })}
+                          placeholder="github_pat_..."
+                          className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                          需具備該倉庫的 <strong className="text-slate-600 dark:text-slate-300">Contents: Read and write</strong> 權限。Token 僅存於本機瀏覽器。
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="pt-2 flex flex-col sm:flex-row gap-2.5 justify-between items-center">
@@ -369,7 +538,7 @@ function PublishModalContent({
                   ) : (
                     <>
                       <span>🚀</span>
-                      <span>立即發布並分享</span>
+                      <span>使用 {provider === 'cloudflare' ? 'Cloudflare KV' : 'GitHub Pages'} 發布</span>
                     </>
                   )}
                 </button>
@@ -383,11 +552,14 @@ function PublishModalContent({
               </div>
 
               <div className="space-y-1">
+                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60 mb-1">
+                  {publishedResult.provider === 'github' ? '🐙 GitHub Pages' : '☁️ Cloudflare Workers KV'}
+                </div>
                 <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-base sm:text-lg">
                   線上發布成功！
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  文件已儲存至雲端，所有人點擊專屬短網址即可立即閱讀。
+                  文件已發布，點擊專屬短網址即可立即閱讀。
                 </p>
               </div>
 
@@ -400,12 +572,18 @@ function PublishModalContent({
                   className="w-full text-xs font-mono text-indigo-600 dark:text-indigo-400 bg-transparent border-none focus:outline-none select-all"
                 />
                 <button
-                  onClick={() => handleCopy(publishedResult.url, '📋 短網址已複製到剪貼簿！')}
+                  onClick={() => handleCopy(publishedResult.url, '📋 網址已複製到剪貼簿！')}
                   className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shrink-0 transition-all"
                 >
                   複製
                 </button>
               </div>
+
+              {publishedResult.provider === 'github' && (
+                <div className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2.5 rounded-xl border border-amber-200/60 dark:border-amber-900/40 text-left">
+                  💡 <strong>提示：</strong>GitHub Pages 首次發布通常需要等待約 15~30 秒進行自動編譯部署，若剛發布打開顯示 404 請稍後重新整理。
+                </div>
+              )}
 
               {/* Password notice if encrypted */}
               {publishedResult.isEncrypted && publishedResult.password && (
@@ -477,7 +655,7 @@ function PublishModalContent({
         {/* Modal Footer */}
         <div className="px-5 py-3 border-t border-slate-200/70 dark:border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-950/30">
           <span className="text-[10px] text-slate-400">
-            {publishedResult ? '管理金鑰已安全保存於本地' : '支援所有裝置與通訊軟體分享'}
+            {publishedResult ? '管理資訊已安全保存於本地' : '支援 Cloudflare KV 與 GitHub Pages 自由切換'}
           </span>
           <button
             onClick={onClose}
