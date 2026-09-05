@@ -7,6 +7,8 @@ import mermaid from 'mermaid';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css';
+import PublishModal from './components/PublishModal';
+import PublishHistoryModal from './components/PublishHistoryModal';
 
 // Initialize and configure Turndown Service for HTML to MD conversion
 const turndownService = new TurndownService({
@@ -1333,6 +1335,8 @@ export default function App() {
   const [showConfirmClear, setShowConfirmClear] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showFilenameModal, setShowFilenameModal] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [showPublishHistoryModal, setShowPublishHistoryModal] = useState(false);
   const [pendingHtmlAction, setPendingHtmlAction] = useState(null);
   const [tempExportFilename, setTempExportFilename] = useState('');
   const [exportHTMLBlob, setExportHTMLBlob] = useState(null);
@@ -4237,12 +4241,29 @@ export default function App() {
               <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-1" />
               <button
                 onClick={() => {
+                  setShowPublishModal(true);
+                  setActivePdfDropdown(null);
+                }}
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50/40 dark:bg-indigo-950/20 hover:bg-indigo-100/60 dark:hover:bg-indigo-900/40 rounded-lg transition-all"
+              >
+                <span className="text-base">🌐</span>
+                <div>
+                  <div className="font-bold text-xs flex items-center gap-1.5">
+                    <span>🌐線上發布與分享</span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-indigo-500 text-white">推薦</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-normal">產出短網址並分享至其他 App (可加密)</div>
+                </div>
+              </button>
+              <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-1" />
+              <button
+                onClick={() => {
                   handleExportHTML('download');
                   setActivePdfDropdown(null);
                 }}
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
               >
-                <span className="text-base">🌐</span>
+                <span className="text-base">💾</span>
                 <div>
                   <div className="font-bold text-xs">下載美化 HTML</div>
                   <div className="text-[10px] text-slate-400 font-normal">快速跳轉大綱與雙欄排版</div>
@@ -4522,12 +4543,29 @@ export default function App() {
                 <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-1" />
                 <button
                   onClick={() => {
+                    setShowPublishModal(true);
+                    setActivePdfDropdown(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50/40 dark:bg-indigo-950/20 hover:bg-indigo-100/60 dark:hover:bg-indigo-900/40 rounded-lg transition-all"
+                >
+                  <span className="text-sm">🌐</span>
+                  <div>
+                    <div className="font-bold text-[11px] flex items-center gap-1">
+                      <span>🌐線上發布與分享</span>
+                      <span className="px-1 rounded text-[8px] font-extrabold bg-indigo-500 text-white">推薦</span>
+                    </div>
+                    <div className="text-[9px] text-slate-400 font-normal">產出短網址並分享至其他 App (可加密)</div>
+                  </div>
+                </button>
+                <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-1" />
+                <button
+                  onClick={() => {
                     handleExportHTML('download');
                     setActivePdfDropdown(null);
                   }}
                   className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
                 >
-                  <span className="text-sm">🌐</span>
+                  <span className="text-sm">💾</span>
                   <div>
                     <div className="font-bold text-[11px]">下載美化 HTML</div>
                     <div className="text-[9px] text-slate-400 font-normal">快速跳轉大綱與雙欄排版</div>
@@ -5142,6 +5180,29 @@ export default function App() {
                       </p>
                     </div>
                   </label>
+
+                  {/* Option 5: Online Publish & History Management */}
+                  <div className="p-3.5 rounded-xl border border-indigo-200/70 dark:border-indigo-900/60 bg-indigo-50/40 dark:bg-indigo-950/20 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm flex items-center gap-1.5">
+                        <span>📑</span>
+                        <span>線上發布歷史管理</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSettingsModal(false);
+                          setShowPublishHistoryModal(true);
+                        }}
+                        className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow transition-all active:scale-95"
+                      >
+                        開啟記錄中心
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      檢視所有已發布的短網址、管理密鑰與密碼。支援一鍵「匯出 / 匯入」備份檔，換新手機也能完整保留記錄與下架權限。
+                    </p>
+                  </div>
                 </div>
               ) : (
                 /* Tab 2: Tutorial Guide */
@@ -5620,6 +5681,28 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* --- ONLINE PUBLISH & HISTORY MODALS --- */}
+      <PublishModal
+        isOpen={showPublishModal}
+        onClose={() => setShowPublishModal(false)}
+        markdown={markdown}
+        readingHtml={readingHtml}
+        readingViewRef={readingViewRef}
+        leftReadingViewRef={leftReadingViewRef}
+        rightReadingViewRef={rightReadingViewRef}
+        showToast={showToast}
+        onOpenHistory={() => {
+          setShowPublishModal(false);
+          setShowPublishHistoryModal(true);
+        }}
+      />
+
+      <PublishHistoryModal
+        isOpen={showPublishHistoryModal}
+        onClose={() => setShowPublishHistoryModal(false)}
+        showToast={showToast}
+      />
 
       {/* --- HIDDEN CANVAS OFFSCREEN RENDERING CONTAINER --- */}
       <div className="absolute left-[-9999px] top-[-9999px] pointer-events-none" aria-hidden="true">
