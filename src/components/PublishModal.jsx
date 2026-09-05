@@ -123,6 +123,11 @@ function PublishModalContent({
         setShowCfConfig(true);
         return;
       }
+      if (targetWorkerUrl.toLowerCase().includes('github.io')) {
+        showToast('⚠️ 您填入的是 GitHub Pages 網址，不是 Cloudflare Worker！若要使用 GitHub 發布，請點選「GitHub Pages」標籤。', 'error');
+        setShowCfConfig(true);
+        return;
+      }
     } else if (provider === 'github') {
       if (!githubConfig.token.trim() || !githubConfig.owner.trim()) {
         showToast('⚠️ 請先填寫 GitHub Token 與使用者名稱！', 'warning');
@@ -434,8 +439,26 @@ function PublishModalContent({
                         placeholder="https://your-worker.workers.dev"
                         className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
                       />
+                      {workerUrl.toLowerCase().includes('github.io') && (
+                        <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-200 text-[11px] space-y-1.5 animate-fade-in">
+                          <div className="font-bold flex items-center gap-1.5">
+                            <span>⚠️</span>
+                            <span>您輸入的是 GitHub Pages 靜態網站網址，無法作為 Cloudflare Worker 伺服器！</span>
+                          </div>
+                          <p className="text-[10px] text-amber-700 dark:text-amber-300 leading-relaxed">
+                            GitHub Pages 是靜態託管空間，無法接收 POST 上傳請求（會回傳 405 錯誤）。若您希望使用 GitHub 發布（完全免伺服器），請直接點擊下方按鈕切換：
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => handleProviderSwitch('github')}
+                            className="px-3 py-1 rounded-lg bg-indigo-600 text-white font-bold text-[10px] hover:bg-indigo-700 transition-all shadow"
+                          >
+                            👉 立即切換為「GitHub Pages」發布
+                          </button>
+                        </div>
+                      )}
                       <p className="text-[10px] text-slate-400 leading-relaxed">
-                        完全免費、免綁信用卡！至 Cloudflare 建立 Worker 並綁定 KV 命名空間 <code className="text-indigo-400">MY_KV</code> 即可。
+                        完全免費、免綁信用卡！至 Cloudflare 建立 Worker 並綁定 KV 命名空間 <code className="text-indigo-400">MY_KV</code> 即可（網址通常為 <code className="text-slate-500">https://xxx.workers.dev</code>）。
                       </p>
                     </div>
                   )}

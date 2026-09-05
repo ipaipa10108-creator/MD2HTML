@@ -15,6 +15,14 @@ const STORAGE_KEY_HISTORY = 'md2html_publish_history';
 
 // --- Configuration Management ---
 
+export function cleanWorkerUrl(url) {
+  let clean = (url || '').trim().replace(/\/+$/, '');
+  if (clean.endsWith('/api/upload')) {
+    clean = clean.slice(0, -'/api/upload'.length).replace(/\/+$/, '');
+  }
+  return clean;
+}
+
 export function getSavedWorkerUrl() {
   return localStorage.getItem(STORAGE_KEY_WORKER_URL) || '';
 }
@@ -23,14 +31,18 @@ export function saveWorkerUrl(url) {
   if (!url) {
     localStorage.removeItem(STORAGE_KEY_WORKER_URL);
   } else {
-    localStorage.setItem(STORAGE_KEY_WORKER_URL, url.trim().replace(/\/+$/, ''));
+    localStorage.setItem(STORAGE_KEY_WORKER_URL, cleanWorkerUrl(url));
   }
 }
 
 export function getSavedGitHubConfig() {
+  let defaultOwner = '';
+  if (typeof window !== 'undefined' && window.location.hostname.endsWith('.github.io')) {
+    defaultOwner = window.location.hostname.split('.')[0];
+  }
   return {
     token: localStorage.getItem(STORAGE_KEY_GITHUB_TOKEN) || '',
-    owner: localStorage.getItem(STORAGE_KEY_GITHUB_OWNER) || '',
+    owner: localStorage.getItem(STORAGE_KEY_GITHUB_OWNER) || defaultOwner,
     repo: localStorage.getItem(STORAGE_KEY_GITHUB_REPO) || 'html-shares'
   };
 }
@@ -79,7 +91,12 @@ function generateShortId(length = 8) {
 // --- Provider 1: Cloudflare Workers KV API ---
 
 export async function uploadToWorker(workerUrl, { html, title, description, isEncrypted }) {
-  const endpoint = `${workerUrl.replace(/\/+$/, '')}/api/upload`;
+  if (workerUrl.toLowerCase().includes('github.io')) {
+    throw new Error('您輸入的是 GitHub Pages 網站網址，靜態空間不支援 POST 上傳！若要使用 GitHub 發布，請切換至「🐙 GitHub Pages」方案。');
+  }
+
+  const baseUrl = cleanWorkerUrl(workerUrl);
+  const endpoint = `${baseUrl}/api/upload`;
 
   const res = await fetch(endpoint, {
     method: 'POST',
@@ -100,7 +117,8 @@ export async function uploadToWorker(workerUrl, { html, title, description, isEn
 }
 
 export async function deleteFromWorker(workerUrl, id, secret) {
-  const endpoint = `${workerUrl.replace(/\/+$/, '')}/api/${id}`;
+  const baseUrl = cleanWorkerUrl(workerUrl);
+  const endpoint = `${baseUrl}/api/${id}`;
 
   const res = await fetch(endpoint, {
     method: 'DELETE',

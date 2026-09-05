@@ -59,8 +59,10 @@ export default {
     try {
       // 1. POST /api/upload: Upload HTML file to Workers KV
       if (request.method === 'POST' && pathname === '/api/upload') {
-        if (!env.MY_KV) {
-          return jsonResponse({ error: 'Workers KV 未綁定 (請在 Worker 設定綁定 MY_KV Namespace)' }, 500);
+        if (!env.MY_KV || typeof env.MY_KV.put !== 'function') {
+          return jsonResponse({
+            error: 'Workers KV 未正確綁定：請至 Cloudflare 後台該 Worker 的「Settings」->「Variables and Secrets」->「KV Namespace Bindings」區塊，點擊「Add binding」，Variable name 輸入「MY_KV」，並選擇您建立的 KV 命名空間（請注意：不是一般 Environment Variables 字串變數，必須是 KV Namespace Bindings）！'
+          }, 500);
         }
 
         const body = await request.json().catch(() => null);
@@ -96,8 +98,8 @@ export default {
 
       // 2. DELETE /api/:id: Delete file with Secret Token
       if (request.method === 'DELETE' && pathname.startsWith('/api/')) {
-        if (!env.MY_KV) {
-          return jsonResponse({ error: 'Workers KV 未綁定' }, 500);
+        if (!env.MY_KV || typeof env.MY_KV.delete !== 'function') {
+          return jsonResponse({ error: 'Workers KV 未正確綁定 (MY_KV)' }, 500);
         }
 
         const id = pathname.replace('/api/', '').trim();
@@ -110,12 +112,12 @@ export default {
         const providedSecret = tokenMatch ? tokenMatch[1].trim() : '';
 
         if (!providedSecret) {
-          return jsonResponse({ error: '未授權：缺少管理金鑰 (Secret Token)' }, 401);
+          return jsonResponse({ error: '缺少授權金鑰 (Authorization Bearer Token)' }, 401);
         }
 
         const { metadata } = await env.MY_KV.getWithMetadata(id);
         if (!metadata) {
-          return jsonResponse({ error: '文件不存在或已下架' }, 404);
+          return jsonResponse({ error: '找不到該文件，可能已被刪除或不存在' }, 404);
         }
 
         if (metadata.secret !== providedSecret) {
@@ -131,8 +133,8 @@ export default {
 
       // 3. GET /:id: Serve HTML document from Workers KV
       if (request.method === 'GET' && pathname.length > 1 && !pathname.startsWith('/api/')) {
-        if (!env.MY_KV) {
-          return new Response('Server configuration error: MY_KV not bound', { status: 500 });
+        if (!env.MY_KV || typeof env.MY_KV.get !== 'function') {
+          return new Response('Server configuration error: MY_KV namespace is not properly bound in Worker settings.', { status: 500 });
         }
 
         const id = pathname.substring(1).trim();
