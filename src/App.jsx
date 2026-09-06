@@ -9,6 +9,14 @@ import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css';
 import PublishModal from './components/PublishModal';
 import PublishHistoryModal from './components/PublishHistoryModal';
+import AiBeautifyModal from './components/AiBeautifyModal';
+import VoicePlayerBar from './components/VoicePlayerBar';
+import {
+  AI_PROVIDERS,
+  getAiConfig,
+  saveAiConfig,
+  testAiConnection
+} from './utils/aiService';
 import {
   getSavedWorkerUrl,
   saveWorkerUrl,
@@ -1211,7 +1219,7 @@ export default function App() {
   });
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [settingsTab, setSettingsTab] = useState('settings'); // 'settings' | 'tutorial'
+  const [settingsTab, setSettingsTab] = useState('settings'); // 'settings' | 'ai' | 'tutorial'
 
   // Online Publish Provider settings synced with Settings modal
   const [settingsProvider, setSettingsProvider] = useState(() => getActiveProvider());
@@ -1219,12 +1227,64 @@ export default function App() {
   const [settingsGithubConfig, setSettingsGithubConfig] = useState(() => getSavedGitHubConfig());
   const [showSettingsGhToken, setShowSettingsGhToken] = useState(false);
 
-  const handleOpenSettings = () => {
-    setSettingsTab('settings');
+  // AI Beautify & Voice Player State
+  const [showAiBeautifyModal, setShowAiBeautifyModal] = useState(false);
+  const [activeBeautifyDropdown, setActiveBeautifyDropdown] = useState(null); // '${uniqueKey}-beautify'
+  const [showReadingVoicePlayer, setShowReadingVoicePlayer] = useState(false);
+  const [aiSettings, setAiSettings] = useState(() => getAiConfig());
+  const [showAiApiKey, setShowAiApiKey] = useState(false);
+  const [testingAiConnection, setTestingAiConnection] = useState(false);
+  const [aiConnectionResult, setAiConnectionResult] = useState(null);
+
+  const handleOpenSettings = (initialTab = 'settings') => {
+    setSettingsTab(typeof initialTab === 'string' ? initialTab : 'settings');
     setSettingsProvider(getActiveProvider());
     setSettingsWorkerUrl(getSavedWorkerUrl());
     setSettingsGithubConfig(getSavedGitHubConfig());
+    setAiSettings(getAiConfig());
+    setAiConnectionResult(null);
     setShowSettingsModal(true);
+  };
+
+  const handleAiSettingsChange = (newConfig) => {
+    setAiSettings(newConfig);
+    saveAiConfig(newConfig);
+  };
+
+  const handleTestAiConnection = async () => {
+    if (!aiSettings.apiKey || !aiSettings.apiKey.trim()) {
+      setAiConnectionResult({ success: false, msg: '請先填入 API Key 再進行連線測試' });
+      return;
+    }
+    setTestingAiConnection(true);
+    setAiConnectionResult(null);
+    try {
+      await testAiConnection(aiSettings);
+      setAiConnectionResult({ success: true, msg: '連線成功！API 金鑰有效且模型回應正常。' });
+    } catch (err) {
+      setAiConnectionResult({ success: false, msg: err.message || '連線失敗' });
+    } finally {
+      setTestingAiConnection(false);
+    }
+  };
+
+  const handleApplyAiBeautify = (beautified) => {
+    if (!beautified || !beautified.trim()) return;
+
+    activePaneRef.current = 'markdown';
+    setMarkdown(beautified);
+    const { html: parsedHTML, readingHtml: parsedReadingHtml, rawFrontMatter } = parseMarkdownToHtml(beautified);
+    setFrontMatterRaw(rawFrontMatter);
+    setHtml(parsedHTML);
+    setReadingHtml(parsedReadingHtml);
+    pushToHistory(beautified);
+    showToast('✨ 已套用 AI 美化成果！(支援 Ctrl+Z 復原)', 'success');
+
+    if (autoSwitchAfterBeautify && layout === 'single') {
+      setTimeout(() => {
+        setSinglePane('reading');
+      }, 100);
+    }
   };
 
   const handleSettingsProviderChange = (p) => {
@@ -1499,11 +1559,14 @@ export default function App() {
     };
   }, []);
 
-  // Click outside detection for PDF dropdowns (supports both mouse click and mobile touch)
+  // Click outside detection for dropdowns (supports both mouse click and mobile touch)
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (!event.target.closest('.pdf-dropdown-container')) {
         setActivePdfDropdown(null);
+      }
+      if (!event.target.closest('.beautify-dropdown-container')) {
+        setActiveBeautifyDropdown(null);
       }
       if (historyMenuRef.current && !historyMenuRef.current.contains(event.target)) {
         setShowHistoryMenu(false);
@@ -4445,6 +4508,15 @@ export default function App() {
             </div>
           )}
 
+          {/* Embedded Voice Player Bar for Reading Pane */}
+          {showReadingVoicePlayer && (
+            <VoicePlayerBar
+              text={markdown}
+              onClose={() => setShowReadingVoicePlayer(false)}
+              className="mb-3"
+            />
+          )}
+
           {/* Editable HTML Viewer Container */}
           {/* NOTE: We intentionally do NOT use dangerouslySetInnerHTML here.
                Instead, a useEffect below updates innerHTML imperatively.
@@ -4536,6 +4608,22 @@ export default function App() {
               A+
             </button>
           </div>
+        )}
+
+        {/* Voice Speech Player Button (visible for reading pane) */}
+        {isReading && (
+          <button
+            onClick={() => setShowReadingVoicePlayer(prev => !prev)}
+            className={`px-2 py-1 text-[11px] font-bold rounded-lg border transition-all flex items-center gap-1 ${
+              showReadingVoicePlayer
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                : 'text-indigo-600 dark:text-indigo-400 border-indigo-200/50 dark:border-indigo-900/50 hover:bg-indigo-50 dark:hover:bg-indigo-950/20'
+            }`}
+            title="開啟/收合內建語音朗讀播放器 (可調速、進度保存續播)"
+          >
+            <span>🎙️</span>
+            <span className="hidden sm:inline">朗讀</span>
+          </button>
         )}
 
         {/* PDF/HTML Export Dropdown */}
@@ -4659,18 +4747,71 @@ export default function App() {
           </div>
         )}
 
-        {/* Smart Beautify Button (only visible for markdown editor) */}
+        {/* Smart Beautify Dropdown Button (only visible for markdown editor) */}
         {isMd && (
-          <button
-            onClick={handleSmartBeautify}
-            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 border border-amber-200/60 dark:border-amber-950/60 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-all active:scale-95 shadow-xs"
-            title="✨ 智慧排版修復：自動修復從 AI 聊天視窗複製文字造成的換行破碎、Emoji 小標、條目清單及補齊 Mermaid 標籤"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-            </svg>
-            <span>智慧美化</span>
-          </button>
+          <div className="relative beautify-dropdown-container">
+            <button
+              onClick={() => setActiveBeautifyDropdown(activeBeautifyDropdown === `${uniqueKey}-beautify` ? null : `${uniqueKey}-beautify`)}
+              className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 border border-amber-200/60 dark:border-amber-950/60 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-all active:scale-95 shadow-xs"
+              title="智慧排版修復與 AI 重新設計"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+              </svg>
+              <span>智慧美化</span>
+              <svg className="w-2.5 h-2.5 ml-0.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {activeBeautifyDropdown === `${uniqueKey}-beautify` && (
+              <div className="absolute left-0 sm:left-auto sm:right-0 mt-1 w-64 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xl z-30 p-1 flex flex-col gap-1 animate-fade-in">
+                {/* Option 1: Original Smart Beautify */}
+                <button
+                  onClick={() => {
+                    handleSmartBeautify();
+                    setActiveBeautifyDropdown(null);
+                  }}
+                  className="w-full flex items-start gap-2.5 p-2 text-left rounded-lg hover:bg-amber-50/70 dark:hover:bg-amber-950/30 transition-all group"
+                >
+                  <span className="text-base mt-0.5">✨</span>
+                  <div className="flex-1">
+                    <div className="font-bold text-xs text-slate-800 dark:text-slate-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 flex items-center justify-between">
+                      <span>智慧美化</span>
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-normal">原生修復</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5">
+                      原功能不變：自動修復換行破碎、終端表格、Emoji 標題與 Mermaid 圍欄
+                    </div>
+                  </div>
+                </button>
+
+                <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-0.5" />
+
+                {/* Option 2: AI Beautify */}
+                <button
+                  onClick={() => {
+                    setActiveBeautifyDropdown(null);
+                    setShowAiBeautifyModal(true);
+                  }}
+                  className="w-full flex items-start gap-2.5 p-2 text-left rounded-lg bg-gradient-to-r from-amber-50/40 via-purple-50/20 to-indigo-50/30 dark:from-amber-950/20 dark:via-slate-900 dark:to-indigo-950/30 hover:from-amber-100/60 dark:hover:from-indigo-900/40 border border-indigo-100/80 dark:border-indigo-900/50 transition-all group"
+                >
+                  <span className="text-base mt-0.5">🤖</span>
+                  <div className="flex-1">
+                    <div className="font-bold text-xs text-indigo-700 dark:text-indigo-300 flex items-center justify-between">
+                      <span>AI 美化</span>
+                      <span className="text-[9px] px-1.5 py-0.2 rounded font-extrabold bg-gradient-to-r from-amber-500 to-indigo-600 text-white shadow-xs">
+                        大模型重塑
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5">
+                      透過 AI 重新設計排版、精修圖表、風格重塑、故事稿與語音播放
+                    </div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Load Local Images button (only visible for markdown editor in single/left columns) */}
@@ -5147,10 +5288,10 @@ export default function App() {
             </div>
 
             {/* Segmented Tabs Bar */}
-            <div className="flex border-b border-slate-200/70 dark:border-slate-800/80 px-5 bg-slate-50/30 dark:bg-slate-900/30">
+            <div className="flex border-b border-slate-200/70 dark:border-slate-800/80 px-5 bg-slate-50/30 dark:bg-slate-900/30 overflow-x-auto">
               <button
                 onClick={() => setSettingsTab('settings')}
-                className={`py-2.5 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+                className={`py-2.5 px-3 sm:px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${
                   settingsTab === 'settings'
                     ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                     : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
@@ -5159,8 +5300,18 @@ export default function App() {
                 <span>⚙️ 功能偏好設定</span>
               </button>
               <button
+                onClick={() => setSettingsTab('ai')}
+                className={`py-2.5 px-3 sm:px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${
+                  settingsTab === 'ai'
+                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+              >
+                <span>🤖 AI 模型 API 設定</span>
+              </button>
+              <button
                 onClick={() => setSettingsTab('tutorial')}
-                className={`py-2.5 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+                className={`py-2.5 px-3 sm:px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${
                   settingsTab === 'tutorial'
                     ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                     : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
@@ -5403,9 +5554,246 @@ export default function App() {
                       </div>
                     )}
                   </div>
+
+                  {/* Quick Card Link to AI Model Settings */}
+                  <div className="p-3.5 rounded-xl border border-indigo-200/70 dark:border-indigo-900/60 bg-gradient-to-r from-amber-50/40 via-indigo-50/30 to-purple-50/40 dark:from-amber-950/20 dark:via-indigo-950/20 dark:to-slate-900 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xl">🤖</span>
+                      <div>
+                        <div className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100">
+                          AI 智能美化模型 API 設定
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                          配置 OpenAI、Claude、Gemini、OpenRouter 或自訂相容 API
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSettingsTab('ai')}
+                      className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-all shrink-0"
+                    >
+                      前往設定 ➔
+                    </button>
+                  </div>
+                </div>
+              ) : settingsTab === 'ai' ? (
+                /* Tab 2: AI Model API Settings */
+                <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300">
+                  <div className="p-4 rounded-xl border border-indigo-200/70 dark:border-indigo-900/60 bg-gradient-to-br from-indigo-50/40 via-purple-50/20 to-slate-50/40 dark:from-indigo-950/20 dark:via-slate-900/40 dark:to-slate-950/40 space-y-3.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">🤖</span>
+                        <div>
+                          <div className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm">
+                            AI 模型提供商與 API 設定
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            設定後與「AI 美化」即時同步，支援各大主流模型與自訂端點
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSettingsModal(false);
+                          setShowAiBeautifyModal(true);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 flex items-center gap-1 shrink-0"
+                      >
+                        <span>✨</span>
+                        <span>開啟 AI 美化</span>
+                      </button>
+                    </div>
+
+                    {/* Provider Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/70 dark:border-slate-700/60">
+                      {AI_PROVIDERS.map((p) => {
+                        const isSelected = aiSettings.provider === p.id;
+                        const isConfigured = p.id === aiSettings.provider && Boolean(aiSettings.apiKey && aiSettings.apiKey.trim());
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => {
+                              const newCfg = {
+                                ...aiSettings,
+                                provider: p.id,
+                                baseUrl: p.defaultBaseUrl,
+                                model: p.defaultModel
+                              };
+                              handleAiSettingsChange(newCfg);
+                              setAiConnectionResult(null);
+                            }}
+                            className={`p-2 rounded-lg text-xs font-bold transition-all flex flex-col gap-0.5 ${
+                              isSelected
+                                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-indigo-500/30'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <span className="truncate">{p.name.split(' ')[0]}</span>
+                              <span
+                                className={`w-2 h-2 rounded-full ${isConfigured ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                                title={isConfigured ? '已填寫金鑰' : '尚未設定'}
+                              />
+                            </div>
+                            <span className="text-[9px] font-normal text-slate-400 truncate">
+                              {p.defaultModel}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Active Provider Form */}
+                    <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 space-y-3 animate-fade-in">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                          <span>⚙️</span>
+                          <span>配置 {AI_PROVIDERS.find(p => p.id === aiSettings.provider)?.name}</span>
+                        </span>
+                        {AI_PROVIDERS.find(p => p.id === aiSettings.provider)?.docsUrl && (
+                          <a
+                            href={AI_PROVIDERS.find(p => p.id === aiSettings.provider)?.docsUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] text-indigo-500 hover:underline flex items-center gap-0.5 font-bold"
+                          >
+                            <span>前往申請 API Key ↗</span>
+                          </a>
+                        )}
+                      </div>
+
+                      {/* API Key */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400">
+                            API Key
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowAiApiKey(!showAiApiKey)}
+                            className="text-[10px] text-indigo-500 hover:underline"
+                          >
+                            {showAiApiKey ? '隱藏' : '顯示'}
+                          </button>
+                        </div>
+                        <input
+                          type={showAiApiKey ? 'text' : 'password'}
+                          value={aiSettings.apiKey || ''}
+                          onChange={(e) => handleAiSettingsChange({ ...aiSettings, apiKey: e.target.value })}
+                          placeholder={AI_PROVIDERS.find(p => p.id === aiSettings.provider)?.placeholderKey || '輸入 API Key'}
+                          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
+
+                      {/* Model */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                          模型名稱 (Model)
+                        </label>
+                        {/* Preset quick pills */}
+                        <div className="flex flex-wrap gap-1 mb-1.5">
+                          {AI_PROVIDERS.find(p => p.id === aiSettings.provider)?.models.map((m) => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => handleAiSettingsChange({ ...aiSettings, model: m })}
+                              className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded border transition-all ${
+                                aiSettings.model === m
+                                  ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 border-indigo-400 dark:border-indigo-700'
+                                  : 'bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                              }`}
+                            >
+                              {m}
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          type="text"
+                          value={aiSettings.model || ''}
+                          onChange={(e) => handleAiSettingsChange({ ...aiSettings, model: e.target.value })}
+                          placeholder="模型名稱"
+                          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
+
+                      {/* Base URL */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400">
+                            API 端點網址 (Base URL)
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const def = AI_PROVIDERS.find(p => p.id === aiSettings.provider)?.defaultBaseUrl || '';
+                              handleAiSettingsChange({ ...aiSettings, baseUrl: def });
+                            }}
+                            className="text-[10px] text-slate-400 hover:text-indigo-500"
+                          >
+                            還原預設網址
+                          </button>
+                        </div>
+                        <input
+                          type="url"
+                          value={aiSettings.baseUrl || ''}
+                          onChange={(e) => handleAiSettingsChange({ ...aiSettings, baseUrl: e.target.value })}
+                          placeholder="https://..."
+                          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
+
+                      {/* Test Connection Button & Status */}
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={handleTestAiConnection}
+                          disabled={testingAiConnection || !aiSettings.apiKey?.trim()}
+                          className="px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-900 font-bold text-xs disabled:opacity-50 transition-all flex items-center gap-1.5"
+                        >
+                          {testingAiConnection ? (
+                            <>
+                              <svg className="animate-spin h-3.5 w-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                              </svg>
+                              <span>連線測試中...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>⚡</span>
+                              <span>測試連線</span>
+                            </>
+                          )}
+                        </button>
+
+                        {aiConnectionResult && (
+                          <div className={`text-[11px] font-bold flex items-center gap-1 ${
+                            aiConnectionResult.success ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                          }`}>
+                            <span>{aiConnectionResult.success ? '✅' : '❌'}</span>
+                            <span>{aiConnectionResult.msg}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Privacy Note */}
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800/80 text-[10px] text-slate-500 dark:text-slate-400 space-y-0.5">
+                      <div className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                        <span>🔒</span>
+                        <span>純前端本機直連保證</span>
+                      </div>
+                      <p className="leading-relaxed">
+                        所有 API Key 與設定僅儲存於您的本機瀏覽器（localStorage），發起 AI 請求時由前端直連對應模型服務，完全無中間伺服器窺探。
+                      </p>
+                    </div>
+                  </div>
                 </div>
               ) : (
-                /* Tab 2: Tutorial Guide */
+                /* Tab 3: Tutorial Guide */
                 <div className="space-y-4 text-slate-700 dark:text-slate-300">
                   <div className="p-4 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 space-y-1.5">
                     <div className="font-bold text-indigo-600 dark:text-indigo-400 text-sm flex items-center gap-1.5">
@@ -5901,6 +6289,16 @@ export default function App() {
       <PublishHistoryModal
         isOpen={showPublishHistoryModal}
         onClose={() => setShowPublishHistoryModal(false)}
+        showToast={showToast}
+      />
+
+      {/* --- AI BEAUTIFY MODAL --- */}
+      <AiBeautifyModal
+        isOpen={showAiBeautifyModal}
+        onClose={() => setShowAiBeautifyModal(false)}
+        markdown={markdown}
+        onApply={handleApplyAiBeautify}
+        onOpenSettings={(tab) => handleOpenSettings(tab)}
         showToast={showToast}
       />
 

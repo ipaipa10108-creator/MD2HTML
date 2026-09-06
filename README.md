@@ -34,8 +34,11 @@
        - **接收分享文字時自動啟動「智慧美化」**：從手機其他 App 分享文字進本工具時自動修復排版。
        - **自動美化後自動切換至「美化閱讀排版」**：智慧美化後自動導航至閱讀視角。
        - **雙欄模式預設開啟「同步捲動」**：進入雙欄對照時自動鎖定左右兩欄同步聯動。
+     - **🤖 AI 模型 API 設定**：
+       - 支援主流大模型廠商：**OpenAI (ChatGPT)**、**Claude (Anthropic)**、**Gemini (Google)**、**OpenRouter** 與 **自訂相容 API（OpenAI 格式，如 DeepSeek、Ollama 等）**。
+       - 自訂 Base URL、模型名稱與 API Key，具備一鍵「測試連線」驗證狀態，所有金鑰 100% 儲存於本地瀏覽器 localStorage，高隱私前端直連。
      - **新手使用教學**：
-       - 專為初次接觸使用者提供系統化圖文指南，快速掌握三向即時編輯、雙欄同步、AI 智慧美化、多樣化匯出與 PWA 捷徑。
+       - 專為初次接觸使用者提供系統化圖文指南，快速掌握三向即時編輯、雙欄同步、原生智慧修復、AI 智能排版美化、語音播放與 PWA 捷徑。
 
 5. **智慧圖片匯出與自由切片**
    - 整合 `html2canvas` 與 `JSZip`，將文件渲染成 2x 高清圖片。
@@ -85,18 +88,37 @@
     - **三向同步保護**：在視覺化閱讀區編輯時，透過特製 Turndown 規則完整保留 ```` ```mermaid ```` 原始碼，不遺失任何圖表定義。
     - **非標準語法寬容解析**：即使直接貼上未加反引號圍欄的 `mermaid\ngraph TD...` 鬆散語法，編輯器亦能自動容錯辨識並即時渲染出圖表。
 
-13. **✨ AI 複製排版智慧修復 (Smart Beautify)**
-    - 針對從 ChatGPT、Claude、Gemini、Antigravity、Claude Code 終端機等對話視窗複製文本時常見的排版缺陷，提供獨立「智慧美化」按鈕（採主動點擊觸發，不干擾標準格式輸入）：
-      - **終端機／Unicode 框線表格轉 GFM**：自動識別終端機 CLI 輸出的 Unicode 繪圖字元表格（`│`, `─`, `┼`, `┌`, `└` 等）或 ASCII 表格（`+`, `-`, `|`），自動轉換為標準 GFM 表格。
-      - **多行儲存格智慧換行整併**：支援將被換行切碎的儲存格內容或括號附註（如 `(最嚴格舊約)`）智慧整併為 `<br>` 換行，並依序號精準辨識獨立資料行，防止行被擠壓或誤整併為單一儲存格。
-      - **GFM 表格防重複解析保護**：內建標準 GFM 分隔線偵測機制，避免重複點擊智慧美化或即時渲染時破壞原有 Markdown 表格結構。
-      - **CLI 溢出橫幅過濾**：自動清除終端機輸出時夾帶的 `Diagram exceeds terminal width` 與 `Displayed as code block` 等提示雜訊。
-      - **全形水平線標準化**：將全形連續橫線（`──────`）自動轉換為標準 Markdown 分隔線（`---`）。
-      - **檔案標籤破碎斷行修復**：將被多個換行切碎的檔案路徑（如 `\n\napi/timeline.js\n`）自動聚合為流暢行內程式碼 (`` `api/timeline.js` ``)，並接合前後破碎語句。
-      - **Emoji 標題階層化**：自動識別 `1. 🔍 ...` 升級為標準 Markdown 二級標題 (`## 1. 🔍`)；單獨 Emoji 標題（如 `📌 問題根因分析：`）升級為三級標題 (`### 📌`)。
-      - **條目與清單美化**：自動將行尾帶冒號的非清單條目格式化為粗體項目符號 (`* **條目**：`)。
-      - **Mermaid 區塊自動補全與提早閉合**：自動將未封閉或鬆散的 Mermaid 圖表程式碼補齊為標準圍欄代碼區塊，並能精確判斷非圖表內文提早結束圍欄，防止後續段落被吞入。
-      - **完整歷史回溯**：智慧美化動作完整納入歷史佇列，隨時支援 `Ctrl + Z` 一鍵復原。
+13. **✨ 智慧美化雙選單：原生智慧修復 ＆ 🤖 AI 智能美化（大模型排版重構 ＋ 語音朗讀續播）**
+    - 在 Markdown 編輯工具列點擊「**智慧美化**」，即可彈出雙功能選擇選單：
+      - **1. 智慧美化（原生修復，原功能不變）**：
+        - 針對從 ChatGPT、Claude、Gemini、Antigravity、終端機複製文字造成的格式缺陷，原汁原味一鍵修復：
+        - **終端機／Unicode 框線表格轉 GFM**：自動識別終端機 CLI 輸出的 Unicode 表格（`│`, `─`, `┼` 等）或 ASCII 表格（`+`, `-`, `|`），轉為標準 GFM 表格。
+        - **多行儲存格智慧換行整併**：被換行切碎的內容或括號附註智慧整併為 `<br>` 換行，並依序號防止誤併。
+        - **GFM 表格防重複解析保護**：內建標準 GFM 分隔線偵測機制，避免重複點擊時破壞原有 Markdown 表格結構。
+        - **CLI 溢出橫幅過濾**：自動清除終端機輸出時夾帶的 `Diagram exceeds terminal width` 等雜訊。
+        - **全形水平線標準化**：將全形連續橫線（`──────`）轉換為標準 Markdown 分隔線（`---`）。
+        - **檔案標籤破碎斷行修復**：將被換行切碎的檔案路徑聚合為行內程式碼 (`` `api/timeline.js` ``)。
+        - **Emoji 標題階層化**：識別 `1. 🔍` 升級為 `##` 標題；單獨 Emoji 升級為 `###` 標題。
+        - **條目與清單美化**：將行尾冒號條目格式化為粗體項目符號 (`* **條目**：`)。
+        - **Mermaid 區塊自動補全與提早閉合**：補齊為標準圍欄代碼區塊，防止後續段落被吞入。
+        - **完整歷史回溯**：智慧美化動作完整納入歷史佇列，隨時支援 `Ctrl + Z` 一鍵復原。
+      - **2. AI 美化（大模型智能重塑 ＋ 通用 Prompt 範本 ＋ 語音朗讀續播）**：
+        - 透過大語言模型（OpenAI、Claude、Gemini、OpenRouter 或自訂相容 API）進行深度排版重塑與內容昇華。
+        - **預設通用 Prompt**：
+          - 針對圖表（Mermaid 向量圖、流程圖、時序圖、甘特圖）與容易出錯的語法進行重編排修復。
+          - 支援在地化語言轉換（繁中/英文等）與專業文字潤飾。
+          - 補充延伸內容、結論要點提煉（Key Takeaways）。
+          - 融入現代視覺配色與提示框（`> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]` 等）。
+          - 轉化為感染力十足的**故事稿／演說講稿**，段落長短適中，極致契合語音聆聽。
+        - **Prompt 範本庫與自訂存取**：
+          - 內建 5 大熱門範本：🌟 通用全效排版、📊 圖表與表格精修、🎙️ 故事稿與語音朗讀、🌐 專業多語翻譯、🎨 視覺排版與提示框強化。
+          - 支援即時編輯 Prompt 內容，可「**儲存為自訂範本**」，下次開啟自由調用，亦可隨時「**還原預設通用 Prompt**」。
+        - **內建語音朗讀播放器 (Web Speech API)**：
+          - 瀏覽器原生離線語音合成，完全免費免外掛。
+          - **速度調節**：提供 0.75x、1.0x、1.25x、1.5x、2.0x 任意切換。
+          - **逐段朗讀追蹤**：智慧過濾 Markdown 標記，自然朗讀段落並高亮進度。
+          - **進度保存下次續播**：自動以文件特徵儲存閱讀進度至本地，下次開啟時自動顯示續播提示，點擊即可從上次中斷段落繼續收聽！
+          - 不僅在 AI 美化彈窗可即時收聽故事稿，在「美化閱讀排版」工具列亦可一鍵開啟/收合朗讀控制面板。
 
 14. **🌐 線上發布與分享（雙方案自由切換 ＋ 零知識端對端加密 ＋ 發布歷史備份）**
     - **雙平台自由選擇（100% 免費、完全免綁信用卡）**：
@@ -180,6 +202,27 @@ MD2HTML 支援兩種完全免費且免綁信用卡的線上短網址發布服務
 
 ---
 
+### 🤖 AI 模型 API 設定指南（支援各大主流模型廠商與自訂端點）
+
+MD2HTML 的「AI 美化」功能採純前端直連各大模型廠商官方 API，所有金鑰僅保存於您個人瀏覽器的 `localStorage`，絕無任何中間伺服器轉發：
+
+| 模型提供商 | 預設模型 | 取得 API Key 方式 | 特點說明 |
+| :--- | :--- | :--- | :--- |
+| **OpenAI** | `gpt-4o` | [OpenAI Platform](https://platform.openai.com/api-keys) | 排版美學頂尖、語義理解強大 |
+| **Claude** | `claude-3-5-sonnet-20241022` | [Anthropic Console](https://console.anthropic.com/settings/keys) | 長文結構整理與技術圖表編排最佳 |
+| **Gemini** | `gemini-2.0-flash` | [Google AI Studio](https://aistudio.google.com/app/apikey) | 免費額度慷慨、反應極速、多模態相容 |
+| **OpenRouter** | `google/gemini-2.0-flash-exp:free` | [OpenRouter Keys](https://openrouter.ai/keys) | 聚合數百種模型、含免費與低成本模型 |
+| **自訂相容 API** | `deepseek-chat` / 自訂 | 支援 DeepSeek, Ollama, Groq 等 | 支援任何遵循 OpenAI 規格之端點與本機模型 |
+
+#### 🛠️ 設定步驟：
+1. 點擊頂部或側欄的「**⚙️ 偏好設定**」圖標。
+2. 切換至「**🤖 AI 模型 API 設定**」標籤頁。
+3. 點選您欲使用的模型提供商（例如：Gemini 或 OpenAI）。
+4. 貼上對應的 **API Key**，並可依個人喜好選擇模型名稱（支援自由輸入任何客製模型代碼）或調整 Base URL 端點。
+5. 點選「**⚡ 測試連線**」，出現綠色勾勾 `✅ 連線成功` 即可開始在 Markdown 編輯區使用「AI 美化」！
+
+---
+
 ### 📦 安裝與本地開發
 
 請確保已安裝 [Node.js](https://nodejs.org/)。
@@ -255,8 +298,11 @@ Welcome to the **Universal Markdown Editor Converter**! A visually stunning, hig
        - **Auto-Beautify on Shared Content**: Automatically fixes formatting when receiving text from other mobile apps.
        - **Auto-Switch to Reading View**: Automatically transitions to the Reading Layout after beautification.
        - **Dual-Pane Sync Scroll by Default**: Persistently remembers dual-pane synchronized scrolling preference.
+     - **AI Model API Settings Tab**:
+       - Supports major LLM providers: **OpenAI**, **Claude (Anthropic)**, **Gemini (Google)**, **OpenRouter**, and **Custom OpenAI-compatible endpoints** (e.g. DeepSeek, Ollama, Groq).
+       - Easily test connections with one click. API keys are 100% saved in the client browser (`localStorage`) for zero-leak privacy.
      - **Tutorial Guide Tab**:
-       - A step-by-step interactive manual for newcomers covering 3-way synchronization, dual split-view, AI Smart Beautifier, exports, and PWA integration.
+       - A step-by-step interactive manual for newcomers covering 3-way synchronization, dual split-view, native smart beautifier, AI formatting redesign, voice reader, and PWA integration.
 
 5. **Smart Image Export & Custom Slicing**
    - Powered by `html2canvas` + `JSZip` for 2× hi-res rendering.
@@ -306,18 +352,37 @@ Welcome to the **Universal Markdown Editor Converter**! A visually stunning, hig
     - **Round-Trip Editing Preservation**: Custom Turndown rules guarantee ```` ```mermaid ```` code blocks remain intact during visual `contentEditable` sync.
     - **Loose Syntax Tolerance**: Automatically recognizes un-fenced `mermaid\ngraph TD...` blocks pasted without backticks.
 
-13. **✨ AI Copy Smart Beautifier**
-    - Designed specifically to fix messy text copied from AI chat interfaces (ChatGPT, Claude, Gemini, Antigravity, Claude Code CLI) via an opt-in toolbar button without altering standard user input:
-      - **Terminal / Unicode Box-Drawing Tables to GFM**: Automatically converts CLI box-drawing tables (`│`, `─`, `┼`, `┌`, `└`) or ASCII tables (`+`, `-`, `|`) into standard GitHub Flavored Markdown (GFM) tables.
-      - **Multi-Line Cell Auto-Merge & `<br>` Preservation**: Intelligently consolidates wrapped cell annotations (e.g. parenthetical notes) into clean `<br>` tags while preserving distinct rows based on list item / type prefixes.
-      - **GFM Table Repetition Guard**: Prevents re-parsing or corrupting tables that are already in valid GFM syntax.
-      - **CLI Terminal Banner Cleanup**: Strips terminal noise lines such as `Diagram exceeds terminal width` and `Displayed as code block`.
-      - **Fullwidth Horizontal Rule Normalization**: Automatically converts fullwidth Unicode dividers (`──────`) into standard Markdown dividers (`---`).
-      - **Broken File Path Auto-Join**: Detects isolated file chip names separated by extraneous newlines and joins them into smooth inline code (`` `api/timeline.js` ``) while healing broken sentence structures.
-      - **Emoji Title Elevation**: Elevates numbered emoji titles (e.g. `1. 🔍`) to Markdown `##` headings and standalone emoji headers to `###` headings.
-      - **List Item Formatting**: Formats key lines ending in colons into crisp bold bullet points (`* **Key**:`).
-      - **Mermaid Fence Enclosure & Early Closing**: Automatically wraps un-fenced Mermaid definitions in ```` ```mermaid ```` code blocks and detects non-diagram text to close fences early.
-      - **Undo Support**: Integrated with the history stack, enabling full `Ctrl + Z` undo capability.
+13. **✨ Dual Beautification Menu: Native Smart Beautify & 🤖 AI Beautify (LLM Redesign + Voice Playback & Resume)**
+    - Clicking the **"Smart Beautify"** button in the Markdown editor pops up a dual-action dropdown:
+      - **1. Smart Beautify (Native Format Repair - original functionality preserved)**:
+        - Repairs messy text copied from ChatGPT, Claude, Gemini, Antigravity, and CLI terminals with zero layout disruption:
+        - **Terminal / Unicode Box-Drawing Tables to GFM**: Converts CLI box-drawing tables (`│`, `─`, `┼`) or ASCII tables (`+`, `-`, `|`) into standard GitHub Flavored Markdown (GFM) tables.
+        - **Multi-Line Cell Auto-Merge & `<br>` Preservation**: Intelligently consolidates wrapped cell notes into clean `<br>` tags while preserving distinct rows based on sequence markers.
+        - **GFM Table Repetition Guard**: Prevents re-parsing or corrupting tables that are already in valid GFM syntax.
+        - **CLI Terminal Banner Cleanup**: Strips terminal noise lines like `Diagram exceeds terminal width`.
+        - **Fullwidth Horizontal Rule Normalization**: Converts fullwidth Unicode dividers (`──────`) into standard Markdown dividers (`---`).
+        - **Broken File Path Auto-Join**: Detects isolated file chip names separated by newlines and joins them into smooth inline code (`` `api/timeline.js` ``).
+        - **Emoji Title Elevation**: Elevates numbered emoji titles (e.g. `1. 🔍`) to `##` headings and standalone emoji headers to `###` headings.
+        - **List Item Formatting**: Formats lines ending in colons into crisp bold bullet points (`* **Key**:`).
+        - **Mermaid Fence Enclosure & Early Closing**: Automatically wraps un-fenced Mermaid definitions and closes fences early to prevent swallowing paragraphs.
+        - **Undo Support**: Integrated with the history stack, enabling full `Ctrl + Z` undo capability.
+      - **2. AI Beautify (LLM-Powered Redesign + Prompt Presets + Voice Playback)**:
+        - Redesign and polish content through leading LLMs (OpenAI, Claude, Gemini, OpenRouter, or Custom endpoints).
+        - **Default Universal Prompt**:
+          - Fixes broken charts and formats, converting processes into syntactically precise Mermaid diagrams.
+          - Localized language translation and stylistic polishing.
+          - Enriches content structure and summarizes Key Takeaways.
+          - Applies modern styling with GitHub Alert callouts (`> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`).
+          - Rewrites content into engaging, speech-friendly **story/speech scripts**.
+        - **Prompt Preset Library & Custom Persistence**:
+          - 5 built-in presets: 🌟 Universal Redesign, 📊 Chart & Table Polish, 🎙️ Story & Speech Script, 🌐 Translation & Localization, 🎨 Visual Styling.
+          - Modify prompts in real time, save custom prompts to `localStorage`, switch between them seamlessly, or reset back to default.
+        - **Built-in Web Speech Voice Player**:
+          - Completely offline browser-native speech synthesis (Web Speech API).
+          - **Speed Adjustments**: 0.75x, 1.0x, 1.25x, 1.5x, 2.0x.
+          - **Segmented Sentence Tracking**: Automatically cleans Markdown tags and reads natural paragraphs.
+          - **Progress Persistence & Resume**: Stores listening progress in `localStorage` per document. Next time you open the document, resume listening from where you stopped with one click!
+          - Accessible both directly within the AI Beautify preview and from the main Reading Layout toolbar.
 
 14. **🌐 Online Publishing & Universal Sharing (Dual-Provider + Zero-Knowledge Client-Side Encryption + Local History Backup)**
     - **Dual Free Providers (100% Free, Zero Credit Card Required)**:
@@ -398,6 +463,27 @@ MD2HTML supports two free publishing channels. You may configure either one or b
 4. **Enter into MD2HTML**:
    - In MD2HTML, click **"🌐 Online Publishing & Sharing"** ➔ Select **`GitHub Pages`**.
    - Your username will be auto-detected (or entered manually). Paste the token and repository name to start publishing!
+
+---
+
+### 🤖 AI Model API Setup Guide (OpenAI, Claude, Gemini, OpenRouter & Custom)
+
+MD2HTML connects directly from your browser to official model APIs. Keys are stored strictly inside your browser's `localStorage` with zero backend intermediary:
+
+| Provider | Default Model | How to get API Key | Highlights |
+| :--- | :--- | :--- | :--- |
+| **OpenAI** | `gpt-4o` | [OpenAI Platform](https://platform.openai.com/api-keys) | Industry standard, exceptional structure & aesthetics |
+| **Claude** | `claude-3-5-sonnet-20241022` | [Anthropic Console](https://console.anthropic.com/settings/keys) | Unmatched code, diagram & document layout intelligence |
+| **Gemini** | `gemini-2.0-flash` | [Google AI Studio](https://aistudio.google.com/app/apikey) | Generous free tier, lightning-fast response times |
+| **OpenRouter** | `google/gemini-2.0-flash-exp:free` | [OpenRouter Keys](https://openrouter.ai/keys) | Hundreds of models, including free and budget-friendly options |
+| **Custom API** | `deepseek-chat` / Custom | Supports DeepSeek, Ollama, Groq, etc. | Any endpoint following the OpenAI API standard |
+
+#### 🛠️ Setup Steps:
+1. Click the gear icon (**⚙️ Preferences**) in the toolbar.
+2. Select the **🤖 AI Model API Settings** tab.
+3. Choose your preferred AI provider (e.g. Gemini or OpenAI).
+4. Paste your **API Key**, optionally customize the model name or Base URL.
+5. Click **⚡ Test Connection** to verify. Once you see `✅ Connection successful`, you're ready to use AI Beautify!
 
 ---
 
