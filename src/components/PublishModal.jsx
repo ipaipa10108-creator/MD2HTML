@@ -21,23 +21,60 @@ function extractInitialMeta(markdown) {
     const line = lines[i].trim();
     if (!extractedTitle && line.startsWith('# ')) {
       extractedTitle = line.replace(/^#\s+/, '').trim();
-    } else if (line.startsWith('## ')) {
-      if (subHeadings.length < 4) {
-        subHeadings.push(line.replace(/^##\s+/, '').trim());
+    } else if (line.startsWith('## ') || line.startsWith('### ')) {
+      const headingText = line.replace(/^#{2,3}\s+/, '').trim();
+      if (headingText && !subHeadings.includes(headingText) && subHeadings.length < 8) {
+        subHeadings.push(headingText);
       }
     }
   }
 
-  const finalTitle = extractedTitle || 'Markdown 文件分享';
+  const finalTitle = extractedTitle || '主題分享：';
   let finalDesc;
   if (subHeadings.length > 0) {
-    finalDesc = `章節摘要：${subHeadings.join(' · ')}`;
+    // 各主題/書籤文字分行顯示
+    finalDesc = subHeadings.map(h => `📌 ${h}`).join('\n');
   } else {
-    const firstParagraph = lines.find(l => l.trim() && !l.startsWith('#') && !l.startsWith('`')) || '';
-    finalDesc = firstParagraph.slice(0, 80) || '點擊連結閱讀精美排版的完整文件內容。';
+    const firstParagraph = lines.find(l => {
+      const trimmed = l.trim();
+      return trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('`') && !trimmed.startsWith('>') && !trimmed.startsWith('-');
+    }) || '';
+    finalDesc = firstParagraph.slice(0, 100) || '點擊專屬短網址立即閱讀完整排版內容。';
   }
 
   return { title: finalTitle, description: finalDesc };
+}
+
+export function buildShareMessage({ title, description, url, password, isEncrypted }) {
+  const parts = [];
+  const cleanTitle = (title || '').trim();
+  const cleanDesc = (description || '').trim();
+
+  if (cleanTitle && cleanTitle !== '主題分享：') {
+    parts.push(cleanTitle);
+    if (cleanDesc && cleanDesc !== cleanTitle) {
+      parts.push(cleanDesc);
+    }
+  } else {
+    // 沒標題時，標示「主題分享：」並分行顯示內文或書籤
+    if (cleanDesc) {
+      parts.push(`主題分享：\n${cleanDesc}`);
+    } else {
+      parts.push('主題分享：');
+    }
+  }
+
+  // 連結和文字分段 (以空行 \n\n 隔開)
+  if (url) {
+    parts.push(url.trim());
+  }
+
+  // 閱讀密碼
+  if (isEncrypted && password) {
+    parts.push(`🔒 閱讀密碼：${password.trim()}`);
+  }
+
+  return parts.join('\n\n');
 }
 
 export default function PublishModal(props) {
@@ -150,7 +187,7 @@ function PublishModalContent({
 
       // Build standalone HTML with embedded lock screen if encrypted
       const fullHtml = await buildPublishableHTML({
-        title: title.trim() || 'Markdown 文件分享',
+        title: title.trim() || '主題分享：',
         description: description.trim(),
         articleContentHtml,
         exportedHeadings,
@@ -165,7 +202,7 @@ function PublishModalContent({
         saveWorkerUrl(workerUrl.trim());
         result = await uploadToWorker(workerUrl.trim(), {
           html: fullHtml,
-          title: title.trim() || 'Markdown 文件分享',
+          title: title.trim() || '主題分享：',
           description: description.trim(),
           isEncrypted
         });
@@ -176,7 +213,7 @@ function PublishModalContent({
           owner: githubConfig.owner.trim(),
           repo: githubConfig.repo.trim() || 'html-shares',
           html: fullHtml,
-          title: title.trim() || 'Markdown 文件分享',
+          title: title.trim() || '主題分享：',
           description: description.trim(),
           isEncrypted
         });
@@ -186,7 +223,7 @@ function PublishModalContent({
       const historyItem = {
         id: result.id,
         url: result.url,
-        title: title.trim() || 'Markdown 文件分享',
+        title: title.trim() || '主題分享：',
         description: description.trim(),
         isEncrypted,
         provider,
@@ -227,27 +264,29 @@ function PublishModalContent({
   const handleSystemShare = async () => {
     if (!publishedResult) return;
     const shareUrl = publishedResult.url;
-    const shareTitle = publishedResult.title || title;
-    let shareText = description;
-    if (publishedResult.isEncrypted && publishedResult.password) {
-      shareText += `\n🔒 閱讀密碼：${publishedResult.password}`;
-    }
+    const shareTitle = publishedResult.title || title || '主題分享：';
+    const fullShareText = buildShareMessage({
+      title: shareTitle,
+      description,
+      url: shareUrl,
+      password: publishedResult.password,
+      isEncrypted: publishedResult.isEncrypted
+    });
 
     if (navigator.share) {
       try {
         await navigator.share({
           title: shareTitle,
-          text: shareText,
-          url: shareUrl
+          text: fullShareText
         });
         showToast('✅ 系統分享面板已開啟！', 'success');
       } catch (err) {
         if (err.name !== 'AbortError') {
-          handleCopy(shareUrl, '📋 分享已取消，連結已自動複製！');
+          handleCopy(fullShareText, '📋 分享已取消，完整訊息已自動複製！');
         }
       }
     } else {
-      handleCopy(shareUrl, '📋 系統不支援原生分享，已為您複製連結！');
+      handleCopy(fullShareText, '📋 系統不支援原生分享，已為您複製完整分享訊息！');
     }
   };
 
@@ -338,7 +377,7 @@ function PublishModalContent({
                       type="text"
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
-                      placeholder="分享文章標題..."
+                      placeholder="分享主題標題 (預設：主題分享：)..."
                       className="w-full text-sm font-bold text-slate-800 dark:text-slate-100 bg-transparent border-b border-indigo-200/60 dark:border-indigo-800/60 pb-1 focus:outline-none focus:border-indigo-500"
                       required
                     />
@@ -347,9 +386,9 @@ function PublishModalContent({
                     <textarea
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      placeholder="文章章節與簡介摘要..."
-                      rows="2"
-                      className="w-full text-xs text-slate-600 dark:text-slate-400 bg-transparent resize-none border-none p-0 focus:outline-none leading-relaxed"
+                      placeholder="文章章節書籤與簡介摘要..."
+                      rows="3"
+                      className="w-full text-xs text-slate-600 dark:text-slate-400 bg-transparent resize-y border-none p-0 focus:outline-none leading-relaxed whitespace-pre-wrap font-sans"
                     />
                   </div>
                   <div className="flex items-center justify-between pt-1 border-t border-indigo-100/60 dark:border-indigo-900/40 text-[10px] text-slate-400">
@@ -642,17 +681,27 @@ function PublishModalContent({
                   <span>系統分享（直接發送至其他 APP）</span>
                 </button>
 
-                {publishedResult.isEncrypted && publishedResult.password && (
-                  <button
-                    onClick={() => {
-                      const shareText = `${publishedResult.title}\n🔗 連結：${publishedResult.url}\n🔒 密碼：${publishedResult.password}`;
-                      handleCopy(shareText, '📋 已複製完整分享訊息 (包含連結與密碼)！');
-                    }}
-                    className="w-full py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-xs font-bold transition-all"
-                  >
-                    📋 一鍵複製訊息（含連結與密碼）
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    const fullShareText = buildShareMessage({
+                      title: publishedResult.title,
+                      description,
+                      url: publishedResult.url,
+                      password: publishedResult.password,
+                      isEncrypted: publishedResult.isEncrypted
+                    });
+                    handleCopy(
+                      fullShareText,
+                      publishedResult.isEncrypted
+                        ? '📋 已複製完整分享訊息（含主題、書籤、連結與密碼）！'
+                        : '📋 已複製完整分享訊息（含主題、書籤與連結）！'
+                    );
+                  }}
+                  className="w-full py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                >
+                  <span>📋</span>
+                  <span>{publishedResult.isEncrypted ? '一鍵複製完整分享訊息（含密碼）' : '一鍵複製完整分享訊息'}</span>
+                </button>
 
                 <div className="flex gap-2 pt-1">
                   <a

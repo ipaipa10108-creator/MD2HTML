@@ -86,7 +86,7 @@ function escapeHtml(text) {
  * If isEncrypted is true, embeds the encrypted payload and a sleek client-side lock/unlock interface.
  */
 export async function buildPublishableHTML({
-  title = 'Markdown 匯出文件',
+  title = '主題分享：',
   description = '',
   articleContentHtml = '',
   exportedHeadings = [],

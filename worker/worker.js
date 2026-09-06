@@ -78,7 +78,7 @@ export default {
         await env.MY_KV.put(id, body.html, {
           metadata: {
             secret,
-            title: body.title || 'Markdown 文件',
+            title: body.title || '主題分享：',
             isEncrypted: Boolean(body.isEncrypted),
             createdAt,
           },

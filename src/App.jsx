@@ -9,6 +9,14 @@ import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css';
 import PublishModal from './components/PublishModal';
 import PublishHistoryModal from './components/PublishHistoryModal';
+import {
+  getSavedWorkerUrl,
+  saveWorkerUrl,
+  getSavedGitHubConfig,
+  saveGitHubConfig,
+  getActiveProvider,
+  saveActiveProvider
+} from './utils/publishService';
 
 // Initialize and configure Turndown Service for HTML to MD conversion
 const turndownService = new TurndownService({
@@ -1204,6 +1212,35 @@ export default function App() {
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [settingsTab, setSettingsTab] = useState('settings'); // 'settings' | 'tutorial'
+
+  // Online Publish Provider settings synced with Settings modal
+  const [settingsProvider, setSettingsProvider] = useState(() => getActiveProvider());
+  const [settingsWorkerUrl, setSettingsWorkerUrl] = useState(() => getSavedWorkerUrl());
+  const [settingsGithubConfig, setSettingsGithubConfig] = useState(() => getSavedGitHubConfig());
+  const [showSettingsGhToken, setShowSettingsGhToken] = useState(false);
+
+  const handleOpenSettings = () => {
+    setSettingsTab('settings');
+    setSettingsProvider(getActiveProvider());
+    setSettingsWorkerUrl(getSavedWorkerUrl());
+    setSettingsGithubConfig(getSavedGitHubConfig());
+    setShowSettingsModal(true);
+  };
+
+  const handleSettingsProviderChange = (p) => {
+    setSettingsProvider(p);
+    saveActiveProvider(p);
+  };
+
+  const handleSettingsWorkerUrlChange = (url) => {
+    setSettingsWorkerUrl(url);
+    saveWorkerUrl(url);
+  };
+
+  const handleSettingsGithubConfigChange = (newConfig) => {
+    setSettingsGithubConfig(newConfig);
+    saveGitHubConfig(newConfig);
+  };
 
   const handleToggleAutoJump = (val) => {
     setAutoJump(val);
@@ -4167,6 +4204,27 @@ export default function App() {
           </div>
         )}
 
+        {/* Mobile Font Size Adjuster - swapped to left of Export button */}
+        {layout === 'single' && (
+          <div className="flex sm:hidden items-center rounded-lg bg-slate-100 dark:bg-slate-900 p-0.5 border border-slate-200/50 dark:border-slate-800/50 gap-0.5 select-none shrink-0">
+            <button
+              onClick={() => setPreviewFontSize(prev => Math.max(12, prev - 1))}
+              className="px-2 py-1 text-[10px] font-extrabold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all active:scale-95"
+              title="縮小字體"
+            >
+              A-
+            </button>
+            <div className="w-[1px] h-3 bg-slate-200 dark:bg-slate-800" />
+            <button
+              onClick={() => setPreviewFontSize(prev => Math.min(24, prev + 1))}
+              className="px-2 py-1 text-[10px] font-extrabold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all active:scale-95"
+              title="放大字體"
+            >
+              A+
+            </button>
+          </div>
+        )}
+
         {/* Mobile PDF Dropdown Button */}
         <div className="relative flex sm:hidden pdf-dropdown-container shrink-0">
           <button
@@ -4184,7 +4242,7 @@ export default function App() {
           </button>
           
           {activePdfDropdown === 'mobile-pdf' && (
-            <div className="absolute right-0 mt-8 w-56 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xl z-40 p-1 flex flex-col gap-0.5 animate-fade-in">
+            <div className="absolute left-0 mt-8 w-56 max-w-[calc(100vw-32px)] rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xl z-40 p-1 flex flex-col gap-0.5 animate-fade-in">
               <button
                 onClick={() => {
                   handleExportPDF('download');
@@ -4286,26 +4344,17 @@ export default function App() {
           )}
         </div>
 
-        {/* Mobile Font Size Adjuster - only visible on mobile (sm:hidden) and single layout */}
-        {layout === 'single' && (
-          <div className="flex sm:hidden items-center rounded-lg bg-slate-100 dark:bg-slate-900 p-0.5 border border-slate-200/50 dark:border-slate-800/50 gap-0.5 ml-1 select-none">
-            <button
-              onClick={() => setPreviewFontSize(prev => Math.max(12, prev - 1))}
-              className="px-2 py-1 text-[10px] font-extrabold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all active:scale-95"
-              title="縮小字體"
-            >
-              A-
-            </button>
-            <div className="w-[1px] h-3 bg-slate-200 dark:bg-slate-800" />
-            <button
-              onClick={() => setPreviewFontSize(prev => Math.min(24, prev + 1))}
-              className="px-2 py-1 text-[10px] font-extrabold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all active:scale-95"
-              title="放大字體"
-            >
-              A+
-            </button>
-          </div>
-        )}
+        {/* Mobile Settings Gear Button - Placed right next to Export on mobile (same line) */}
+        <button
+          onClick={handleOpenSettings}
+          className="flex sm:hidden p-1.5 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all active:scale-95 border border-slate-200/60 dark:border-slate-800/60 shadow-xs shrink-0"
+          title="偏好設定與使用教學"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
       </div>
     );
   };
@@ -4468,6 +4517,27 @@ export default function App() {
           )}
         </div>
 
+        {/* Font Size Adjuster */}
+        {isReading && layout === 'single' && (
+          <div className="hidden sm:flex items-center rounded-lg bg-slate-100 dark:bg-slate-900 p-0.5 border border-slate-200/50 dark:border-slate-800/50 gap-0.5 ml-1 select-none">
+            <button
+              onClick={() => setPreviewFontSize(prev => Math.max(12, prev - 1))}
+              className="px-2 py-1 text-[10px] font-extrabold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all active:scale-95"
+              title="縮小字體"
+            >
+              A-
+            </button>
+            <div className="w-[1px] h-3 bg-slate-200 dark:bg-slate-800" />
+            <button
+              onClick={() => setPreviewFontSize(prev => Math.min(24, prev + 1))}
+              className="px-2 py-1 text-[10px] font-extrabold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all active:scale-95"
+              title="放大字體"
+            >
+              A+
+            </button>
+          </div>
+        )}
+
         {/* PDF/HTML Export Dropdown */}
         {isReading && (
           <div className="relative hidden sm:flex pdf-dropdown-container">
@@ -4589,27 +4659,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Font Size Adjuster */}
-        {isReading && layout === 'single' && (
-          <div className="hidden sm:flex items-center rounded-lg bg-slate-100 dark:bg-slate-900 p-0.5 border border-slate-200/50 dark:border-slate-800/50 gap-0.5 ml-1 select-none">
-            <button
-              onClick={() => setPreviewFontSize(prev => Math.max(12, prev - 1))}
-              className="px-2 py-1 text-[10px] font-extrabold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all active:scale-95"
-              title="縮小字體"
-            >
-              A-
-            </button>
-            <div className="w-[1px] h-3 bg-slate-200 dark:bg-slate-800" />
-            <button
-              onClick={() => setPreviewFontSize(prev => Math.min(24, prev + 1))}
-              className="px-2 py-1 text-[10px] font-extrabold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded transition-all active:scale-95"
-              title="放大字體"
-            >
-              A+
-            </button>
-          </div>
-        )}
-
         {/* Smart Beautify Button (only visible for markdown editor) */}
         {isMd && (
           <button
@@ -4669,6 +4718,20 @@ export default function App() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
             <span>清除</span>
+          </button>
+        )}
+
+        {/* Mobile Settings Gear Button for non-reading tabs in single column */}
+        {uniqueKey === 'single-pane-util' && paneType !== 'reading' && (
+          <button
+            onClick={handleOpenSettings}
+            className="flex sm:hidden p-1.5 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all active:scale-95 border border-slate-200/60 dark:border-slate-800/60 shadow-xs shrink-0"
+            title="偏好設定與使用教學"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
           </button>
         )}
       </div>
@@ -4917,13 +4980,10 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Settings & Tutorial Gear Button (Single Column) */}
+                {/* Settings & Tutorial Gear Button (Single Column - only visible on sm: and up to avoid eating mobile line) */}
                 <button
-                  onClick={() => {
-                    setSettingsTab('settings');
-                    setShowSettingsModal(true);
-                  }}
-                  className="p-1.5 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all active:scale-95 border border-slate-200/60 dark:border-slate-800/60 shadow-xs ml-1"
+                  onClick={handleOpenSettings}
+                  className="hidden sm:inline-flex p-1.5 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all active:scale-95 border border-slate-200/60 dark:border-slate-800/60 shadow-xs ml-1"
                   title="偏好設定與使用教學"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -4988,10 +5048,7 @@ export default function App() {
 
                   {/* Settings & Tutorial Gear Button */}
                   <button
-                    onClick={() => {
-                      setSettingsTab('settings');
-                      setShowSettingsModal(true);
-                    }}
+                    onClick={handleOpenSettings}
                     className="p-1.5 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all active:scale-95 border border-slate-200/60 dark:border-slate-800/60 shadow-xs shrink-0"
                     title="偏好設定與使用教學"
                   >
@@ -5181,12 +5238,19 @@ export default function App() {
                     </div>
                   </label>
 
-                  {/* Option 5: Online Publish & History Management */}
-                  <div className="p-3.5 rounded-xl border border-indigo-200/70 dark:border-indigo-900/60 bg-indigo-50/40 dark:bg-indigo-950/20 space-y-2">
+                  {/* Option 5: Online Publish Dual-Provider Settings (Cloudflare Workers KV & GitHub Pages) */}
+                  <div className="p-4 rounded-xl border border-indigo-200/70 dark:border-indigo-900/60 bg-gradient-to-br from-indigo-50/40 via-purple-50/20 to-slate-50/40 dark:from-indigo-950/20 dark:via-slate-900/40 dark:to-slate-950/40 space-y-3.5">
                     <div className="flex items-center justify-between">
-                      <div className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm flex items-center gap-1.5">
-                        <span>📑</span>
-                        <span>線上發布歷史管理</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">🌐</span>
+                        <div>
+                          <div className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm">
+                            線上發布服務設定（兩家免信用卡平台）
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            設定後與「匯出 / 線上發布」雙向即時同步，可自由切換發布平台
+                          </p>
+                        </div>
                       </div>
                       <button
                         type="button"
@@ -5194,14 +5258,150 @@ export default function App() {
                           setShowSettingsModal(false);
                           setShowPublishHistoryModal(true);
                         }}
-                        className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow transition-all active:scale-95"
+                        className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 flex items-center gap-1 shrink-0"
+                        title="開啟發布歷史管理"
                       >
-                        開啟記錄中心
+                        <span>📑</span>
+                        <span>記錄中心</span>
                       </button>
                     </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      檢視所有已發布的短網址、管理密鑰與密碼。支援一鍵「匯出 / 匯入」備份檔，換新手機也能完整保留記錄與下架權限。
-                    </p>
+
+                    {/* Dual Provider Selection Tabs */}
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/70 dark:border-slate-700/60">
+                      <button
+                        type="button"
+                        onClick={() => handleSettingsProviderChange('cloudflare')}
+                        className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex flex-col items-center justify-center gap-0.5 ${
+                          settingsProvider === 'cloudflare'
+                            ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>☁️ Cloudflare KV</span>
+                          <span
+                            className={`w-2 h-2 rounded-full ${Boolean(settingsWorkerUrl.trim()) ? 'bg-emerald-500' : 'bg-amber-400'}`}
+                            title={Boolean(settingsWorkerUrl.trim()) ? '已設定' : '尚未設定'}
+                          />
+                        </div>
+                        <span className="text-[10px] font-normal text-slate-400">極速秒出 · 高隱私</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSettingsProviderChange('github')}
+                        className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex flex-col items-center justify-center gap-0.5 ${
+                          settingsProvider === 'github'
+                            ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>🐙 GitHub Pages</span>
+                          <span
+                            className={`w-2 h-2 rounded-full ${Boolean(settingsGithubConfig.token.trim() && settingsGithubConfig.owner.trim()) ? 'bg-emerald-500' : 'bg-amber-400'}`}
+                            title={Boolean(settingsGithubConfig.token.trim() && settingsGithubConfig.owner.trim()) ? '已設定' : '尚未設定'}
+                          />
+                        </div>
+                        <span className="text-[10px] font-normal text-slate-400">免架後端 · 純前端</span>
+                      </button>
+                    </div>
+
+                    {/* Active Provider Config Form */}
+                    {settingsProvider === 'cloudflare' ? (
+                      <div className="space-y-2 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 animate-fade-in">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                            Cloudflare Worker 網址
+                          </label>
+                          <span className={`text-[10px] font-bold ${Boolean(settingsWorkerUrl.trim()) ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'}`}>
+                            {Boolean(settingsWorkerUrl.trim()) ? '✅ 已綁定設定' : '⚠️ 尚未填寫'}
+                          </span>
+                        </div>
+                        <input
+                          type="url"
+                          value={settingsWorkerUrl}
+                          onChange={(e) => handleSettingsWorkerUrlChange(e.target.value)}
+                          placeholder="https://your-worker.workers.dev"
+                          className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+                        />
+                        {settingsWorkerUrl.toLowerCase().includes('github.io') && (
+                          <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-200 text-[10px] space-y-1">
+                            <div className="font-bold flex items-center gap-1">
+                              <span>⚠️</span>
+                              <span>您輸入的是 GitHub Pages 網址，不是 Cloudflare Worker！</span>
+                            </div>
+                            <p>GitHub Pages 靜態網站不支援接收 POST 發布請求。若要使用 GitHub 發布，請點擊上方切換為「GitHub Pages」。</p>
+                          </div>
+                        )}
+                        <p className="text-[10px] text-slate-400 leading-relaxed">
+                          完全免費、免信用卡。建立 Worker 並綁定 KV 命名空間 <code className="text-indigo-500 dark:text-indigo-400 font-mono">MY_KV</code> 即可。
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 animate-fade-in">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                            GitHub Pages 倉庫與金鑰
+                          </span>
+                          <span className={`text-[10px] font-bold ${Boolean(settingsGithubConfig.token.trim() && settingsGithubConfig.owner.trim()) ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'}`}>
+                            {Boolean(settingsGithubConfig.token.trim() && settingsGithubConfig.owner.trim()) ? '✅ 已綁定設定' : '⚠️ 尚未填寫'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                              GitHub 帳號 (Owner)
+                            </label>
+                            <input
+                              type="text"
+                              value={settingsGithubConfig.owner}
+                              onChange={(e) => handleSettingsGithubConfigChange({ ...settingsGithubConfig, owner: e.target.value })}
+                              placeholder="如: octocat"
+                              className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                              公開倉庫 (Repo)
+                            </label>
+                            <input
+                              type="text"
+                              value={settingsGithubConfig.repo}
+                              onChange={(e) => handleSettingsGithubConfigChange({ ...settingsGithubConfig, repo: e.target.value })}
+                              placeholder="html-shares"
+                              className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400">
+                              GitHub Personal Access Token (PAT)
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setShowSettingsGhToken(!showSettingsGhToken)}
+                              className="text-[10px] text-indigo-500 hover:underline"
+                            >
+                              {showSettingsGhToken ? '隱藏' : '顯示'}
+                            </button>
+                          </div>
+                          <input
+                            type={showSettingsGhToken ? 'text' : 'password'}
+                            value={settingsGithubConfig.token}
+                            onChange={(e) => handleSettingsGithubConfigChange({ ...settingsGithubConfig, token: e.target.value })}
+                            placeholder="github_pat_..."
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+                          />
+                          <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                            Token 需具備該倉庫的 <strong className="text-slate-600 dark:text-slate-300">Contents: Read and write</strong> 權限。所有資訊僅儲存於本機瀏覽器。
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
