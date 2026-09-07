@@ -21,7 +21,12 @@ import {
   getCachedOpenRouterLiveFreeModels,
   getAiConfig,
   saveAiConfig,
-  testAiConnection
+  testAiConnection,
+  DEFAULT_PROVIDER_CONFIGS,
+  getSavedPrompts,
+  saveSavedPrompts,
+  getLastPromptId,
+  setLastPromptId
 } from './utils/aiService';
 import {
   getSavedWorkerUrl,
@@ -1252,7 +1257,7 @@ export default function App() {
   const [openRouterFetchStatus, setOpenRouterFetchStatus] = useState(() => getCachedOpenRouterLiveFreeModels() ? 'cached' : null);
 
   const handleFetchGeminiModels = async (keyOverride = null) => {
-    const keyToUse = (keyOverride || aiSettings.apiKey || '').trim();
+    const keyToUse = (keyOverride || aiSettings.providers?.gemini?.apiKey || (aiSettings.provider === 'gemini' ? aiSettings.apiKey : '') || '').trim();
     if (!keyToUse) {
       showToast('請先填入 Gemini API Key 才能即時取得模型清單', 'info');
       return;
@@ -1307,8 +1312,142 @@ export default function App() {
   };
 
   const handleAiSettingsChange = (newConfig) => {
-    setAiSettings(newConfig);
     saveAiConfig(newConfig);
+    setAiSettings(getAiConfig());
+  };
+
+  // --- Export / Import All Settings & Configs ---
+  const settingsFileInputRef = useRef(null);
+
+  const handleExportAllSettings = () => {
+    try {
+      const exportData = {
+        appName: 'MD2HTML',
+        exportVersion: '1.0',
+        exportedAt: new Date().toISOString(),
+        preferences: {
+          autoJump,
+          autoBeautifyOnShare,
+          autoSwitchAfterBeautify,
+          syncScroll
+        },
+        aiConfig: getAiConfig(),
+        aiRelated: {
+          savedPrompts: getSavedPrompts(),
+          lastPromptId: getLastPromptId(),
+          speechRate: localStorage.getItem('md2html_speech_rate') || '1',
+          speechVoice: localStorage.getItem('md2html_speech_voice') || ''
+        },
+        publishConfig: {
+          provider: getActiveProvider(),
+          workerUrl: getSavedWorkerUrl(),
+          github: getSavedGitHubConfig()
+        }
+      };
+
+      const jsonStr = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+      const fileName = `md2html_settings_${dateStr}.json`;
+
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+
+      showToast('✅ 所有功能偏好、AI 各家金鑰與配置已成功匯出 JSON！', 'success');
+    } catch (err) {
+      console.error('Export settings error:', err);
+      showToast('❌ 匯出設定失敗，請重試！', 'error');
+    }
+  };
+
+  const handleImportAllSettings = (event) => {
+    const file = event.target?.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result;
+        const data = JSON.parse(content);
+
+        if (!data || typeof data !== 'object') {
+          throw new Error('設定檔格式不正確');
+        }
+
+        // 1. Restore Preferences
+        if (data.preferences && typeof data.preferences === 'object') {
+          if (typeof data.preferences.autoJump === 'boolean') {
+            handleToggleAutoJump(data.preferences.autoJump);
+          }
+          if (typeof data.preferences.autoBeautifyOnShare === 'boolean') {
+            handleToggleAutoBeautifyOnShare(data.preferences.autoBeautifyOnShare);
+          }
+          if (typeof data.preferences.autoSwitchAfterBeautify === 'boolean') {
+            handleToggleAutoSwitchAfterBeautify(data.preferences.autoSwitchAfterBeautify);
+          }
+          if (typeof data.preferences.syncScroll === 'boolean') {
+            handleToggleSyncScroll(data.preferences.syncScroll);
+          }
+        }
+
+        // 2. Restore AI Config (Providers & Active Provider)
+        if (data.aiConfig && typeof data.aiConfig === 'object') {
+          saveAiConfig(data.aiConfig);
+          setAiSettings(getAiConfig());
+        }
+
+        // 3. Restore AI Related Settings (Prompts & Speech)
+        if (data.aiRelated && typeof data.aiRelated === 'object') {
+          if (Array.isArray(data.aiRelated.savedPrompts)) {
+            saveSavedPrompts(data.aiRelated.savedPrompts);
+          }
+          if (data.aiRelated.lastPromptId) {
+            setLastPromptId(data.aiRelated.lastPromptId);
+          }
+          if (data.aiRelated.speechRate) {
+            localStorage.setItem('md2html_speech_rate', String(data.aiRelated.speechRate));
+          }
+          if (data.aiRelated.speechVoice) {
+            localStorage.setItem('md2html_speech_voice', String(data.aiRelated.speechVoice));
+          }
+        }
+
+        // 4. Restore Publishing Config
+        if (data.publishConfig && typeof data.publishConfig === 'object') {
+          if (data.publishConfig.provider) {
+            saveActiveProvider(data.publishConfig.provider);
+            setSettingsProvider(data.publishConfig.provider);
+          }
+          if (data.publishConfig.workerUrl !== undefined) {
+            saveWorkerUrl(data.publishConfig.workerUrl);
+            setSettingsWorkerUrl(data.publishConfig.workerUrl);
+          }
+          if (data.publishConfig.github && typeof data.publishConfig.github === 'object') {
+            saveGitHubConfig(
+              data.publishConfig.github.token || '',
+              data.publishConfig.github.owner || '',
+              data.publishConfig.github.repo || 'html-shares'
+            );
+            setSettingsGithubConfig(data.publishConfig.github);
+          }
+        }
+
+        showToast('🎉 設定已成功匯入！功能偏好、AI 各家金鑰與配置已全數復原。', 'success');
+      } catch (err) {
+        console.error('Import settings error:', err);
+        showToast(`❌ 匯入失敗：${err.message || '無效的 JSON 設定檔'}`, 'error');
+      } finally {
+        if (event.target) event.target.value = '';
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleTestAiConnection = async () => {
@@ -5389,6 +5528,14 @@ export default function App() {
 
             {/* Modal Body */}
             <div className="p-5 sm:p-6 overflow-y-auto max-h-[calc(90vh-140px)] space-y-4">
+              {/* Hidden file input for settings JSON import */}
+              <input
+                type="file"
+                ref={settingsFileInputRef}
+                onChange={handleImportAllSettings}
+                accept=".json,application/json"
+                className="hidden"
+              />
               {settingsTab === 'settings' ? (
                 <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300">
                   {/* Option 1: Auto Jump on Paste */}
@@ -5642,57 +5789,122 @@ export default function App() {
                       前往設定 ➔
                     </button>
                   </div>
+
+                  {/* Setting Backup & Restore Card (Export / Import JSON) */}
+                  <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-850/60 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">📦</span>
+                        <div>
+                          <div className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm">
+                            設定備份與跨裝置還原（JSON 匯入 / 匯出）
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            記錄所有功能偏好、各模型提供商獨立 API Key、Prompt 範本與線上發布配置
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleExportAllSettings}
+                        className="flex-1 py-2 px-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs shadow-2xs transition-all flex items-center justify-center gap-1.5 active:scale-98"
+                        title="匯出所有功能偏好、AI Key 與配置為 JSON 檔案"
+                      >
+                        <span>📤</span>
+                        <span>匯出設定 (JSON)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => settingsFileInputRef.current?.click()}
+                        className="flex-1 py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-98"
+                        title="自 JSON 備份檔還原所有偏好與 API Key"
+                      >
+                        <span>📥</span>
+                        <span>匯入設定檔 (JSON)</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ) : settingsTab === 'ai' ? (
                 /* Tab 2: AI Model API Settings */
                 <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300">
                   <div className="p-4 rounded-xl border border-indigo-200/70 dark:border-indigo-900/60 bg-gradient-to-br from-indigo-50/40 via-purple-50/20 to-slate-50/40 dark:from-indigo-950/20 dark:via-slate-900/40 dark:to-slate-950/40 space-y-3.5">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
                         <span className="text-xl">🤖</span>
                         <div>
                           <div className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm">
-                            AI 模型提供商與 API 設定
+                            AI 模型提供商與 API 設定（各家獨立金鑰）
                           </div>
                           <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                            設定後與「AI 美化」即時同步，支援各大主流模型與自訂端點
+                            各廠商 API Key 與配置分別獨立儲存，切換互不影響
                           </p>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowSettingsModal(false);
-                          setShowAiBeautifyModal(true);
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 flex items-center gap-1 shrink-0"
-                      >
-                        <span>✨</span>
-                        <span>開啟 AI 美化</span>
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={handleExportAllSettings}
+                          className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-[11px] shadow-2xs transition-all flex items-center gap-1"
+                          title="匯出備份所有設定與 AI 金鑰"
+                        >
+                          <span>📤</span>
+                          <span>匯出</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => settingsFileInputRef.current?.click()}
+                          className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-[11px] shadow-2xs transition-all flex items-center gap-1"
+                          title="匯入設定與 AI 金鑰"
+                        >
+                          <span>📥</span>
+                          <span>匯入</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowSettingsModal(false);
+                            setShowAiBeautifyModal(true);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 flex items-center gap-1 shrink-0"
+                        >
+                          <span>✨</span>
+                          <span>開啟 AI 美化</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Provider Grid */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/70 dark:border-slate-700/60">
                       {AI_PROVIDERS.map((p) => {
                         const isSelected = aiSettings.provider === p.id;
-                        const isConfigured = p.id === aiSettings.provider && Boolean(aiSettings.apiKey && aiSettings.apiKey.trim());
+                        const pConf = aiSettings.providers?.[p.id] || DEFAULT_PROVIDER_CONFIGS[p.id] || {};
+                        const isConfigured = Boolean(pConf?.apiKey && pConf.apiKey.trim());
                         return (
                           <button
                             key={p.id}
                             type="button"
                             onClick={() => {
-                              let defaultM = p.defaultModel;
-                              if (p.id === 'openrouter' && aiSettings.openRouterOnlyFree) {
-                                defaultM = OPENROUTER_FREE_MODELS[0];
-                              } else if (p.id === 'gemini' && aiSettings.geminiOnlyLiteGemma) {
-                                defaultM = GEMINI_LITE_GEMMA_MODELS[0].id;
+                              const targetConf = aiSettings.providers?.[p.id] || DEFAULT_PROVIDER_CONFIGS[p.id] || {};
+                              let defaultM = targetConf.model || p.defaultModel;
+                              if (p.id === 'openrouter' && targetConf.openRouterOnlyFree) {
+                                defaultM = targetConf.model || OPENROUTER_FREE_MODELS[0];
+                              } else if (p.id === 'gemini' && targetConf.geminiOnlyLiteGemma) {
+                                defaultM = targetConf.model || GEMINI_LITE_GEMMA_MODELS[0].id;
                               }
                               const newCfg = {
                                 ...aiSettings,
                                 provider: p.id,
-                                baseUrl: p.defaultBaseUrl,
-                                model: defaultM
+                                apiKey: targetConf.apiKey || '',
+                                baseUrl: targetConf.baseUrl || p.defaultBaseUrl,
+                                model: defaultM,
+                                customHeaders: targetConf.customHeaders || '',
+                                openRouterOnlyFree: Boolean(targetConf.openRouterOnlyFree),
+                                geminiOnlyLiteGemma: Boolean(targetConf.geminiOnlyLiteGemma)
                               };
                               handleAiSettingsChange(newCfg);
                               setAiConnectionResult(null);
@@ -5707,11 +5919,11 @@ export default function App() {
                               <span className="truncate">{p.name.split(' ')[0]}</span>
                               <span
                                 className={`w-2 h-2 rounded-full ${isConfigured ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
-                                title={isConfigured ? '已填寫金鑰' : '尚未設定'}
+                                title={isConfigured ? `${p.name} 已填寫專屬金鑰` : `${p.name} 尚未設定金鑰`}
                               />
                             </div>
                             <span className="text-[9px] font-normal text-slate-400 truncate">
-                              {p.defaultModel}
+                              {pConf.model || p.defaultModel}
                             </span>
                           </button>
                         );

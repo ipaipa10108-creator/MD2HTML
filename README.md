@@ -34,10 +34,13 @@
        - **接收分享文字時自動啟動「智慧美化」**：從手機其他 App 分享文字進本工具時自動修復排版。
        - **自動美化後自動切換至「美化閱讀排版」**：智慧美化後自動導航至閱讀視角。
        - **雙欄模式預設開啟「同步捲動」**：進入雙欄對照時自動鎖定左右兩欄同步聯動。
+        - **📦 設定備份與跨裝置還原（JSON 匯入 / 匯出）**：一鍵將功能偏好開關、AI 各提供商獨立 API Key 與配置、自訂 Prompt 範本、語音偏好以及線上發布設定打包匯出為 JSON 備份檔；並可隨時選取備份檔一鍵還原，換瀏覽器或新裝置時免重新輸入金鑰與設定。
      - **🤖 AI 模型 API 設定**：
        - 支援主流大模型廠商：**OpenAI (ChatGPT)**、**Claude (Anthropic)**、**Gemini (Google)**、**OpenRouter** 與 **自訂相容 API（OpenAI 格式，如 DeepSeek、Ollama 等）**。
+        - **各模型廠商 API Key 獨立分離儲存**：各大模型提供商之 API Key、Base URL、模型名稱與專屬開關皆於本機 `localStorage` **分別獨立儲存**，切換廠商時互不干擾、絕不互相覆蓋；各廠商選單按鈕具備獨立金鑰指示燈（綠燈表示該家已填寫金鑰，灰燈為未設定）。
        - **OpenRouter 免費模型即時篩選**：支援「僅列出 open router free model」核取方塊；一鍵點選「即時抓取免費模型」透過 OpenRouter API 動態獲取最新免費模型清單；隨附「開啟 Open Router Model ↗」官網模型庫捷徑。
        - **Gemini 即時動態同步 ＆ 官方最新 RPD 降序排列**：支援「僅列出 flash-lite 和 Gemma 模型」核取篩選；點擊「即時抓取最新模型」或測試連線成功時，前端直連 Google API 即時同步最新可用模型；清單嚴格依 Google 官方最新公佈之 Free Tier 配額標準（RPD - 每日請求上限）由高至低排列（**Gemma 系列 14,400 RPD** 居首，**3.1/3.5 Flash-Lite 系列 500 RPD** 次之，**2.5 Flash-Lite / Flash 系列 20 RPD**，無免費額度模型標記 0 RPD），每個模型附帶專屬 RPD 徽章，並附「查看配額 ↗」直連 Google AI Studio 官方說明。
+        - **隨時匯入 / 匯出金鑰配置**：提供專屬「📤 匯出」與「📥 匯入」捷徑按鈕，可在配置各家金鑰時隨時單獨或整體備份移轉。
        - 自訂 Base URL、模型名稱與 API Key，具備一鍵「⚡ 測試連線」驗證狀態，所有金鑰與設定 100% 儲存於本地瀏覽器 `localStorage`，高隱私前端直連。
      - **新手使用教學**：
        - 專為初次接觸使用者提供系統化圖文指南，快速掌握三向即時編輯、雙欄同步、原生智慧修復、AI 智能排版美化、語音播放與 PWA 捷徑。
@@ -231,6 +234,7 @@ MD2HTML 的「AI 美化」功能採純前端直連各大模型廠商官方 API�
      - 點擊「**🔄 即時抓取最新模型**」（或在點選測試連線成功時自動觸發），即時向 Google API 獲取您帳號可用的最新模型。
      - 模型清單嚴格依 **RPD 由高至低排列**（例如：`gemma-4-26b` / `gemma-2-27b-it` 達 **14,400 RPD** 居頂，`gemini-3.5-flash-lite` 達 **500 RPD**，`gemini-2.5-flash-lite` 為 **20 RPD**，無免費配額的舊款 `gemini-2.0-flash-lite` 則標註 **0 RPD**），標籤清晰展示 RPD 額度徽章，並提供「**查看配額 ↗**」直達官方說明。
 6. 點選「**⚡ 測試連線**」，出現綠色勾勾 `✅ 連線成功` 即可開始在 Markdown 編輯區使用「AI 美化」！
+7. **備份與跨裝置還原設定**：可隨時在 AI 設定頁面右上角點選「📤 匯出」或在偏好設定首頁點選「匯出設定 (JSON)」下載備份檔；換手機或更換電腦時，點擊「📥 匯入」即可一鍵還原所有提供商的金鑰、端點、模型與功能偏好。
 
 ---
 
@@ -309,10 +313,13 @@ Welcome to the **Universal Markdown Editor Converter**! A visually stunning, hig
        - **Auto-Beautify on Shared Content**: Automatically fixes formatting when receiving text from other mobile apps.
        - **Auto-Switch to Reading View**: Automatically transitions to the Reading Layout after beautification.
        - **Dual-Pane Sync Scroll by Default**: Persistently remembers dual-pane synchronized scrolling preference.
+        - **📦 Backup & Restore Configurations (JSON Export / Import)**: One-click export of all preferences, isolated AI provider API keys, custom prompt presets, speech settings, and publishing configurations into a clean JSON file; one-click import to restore settings across browsers or devices instantly.
      - **AI Model API Settings Tab**:
        - Supports major LLM providers: **OpenAI**, **Claude (Anthropic)**, **Gemini (Google)**, **OpenRouter**, and **Custom OpenAI-compatible endpoints** (e.g. DeepSeek, Ollama, Groq).
+        - **Independent API Key Storage per Provider**: API keys, Base URLs, model selections, and custom parameters for each provider are stored in completely isolated records in client `localStorage`. Switching between providers never overwrites keys, and status badges independently reflect whether each provider is configured.
        - **OpenRouter Live Free Models Filter**: Toggle "Only list open router free models"; fetch real-time free models dynamically from OpenRouter API; quick link to `openrouter.ai/models`.
        - **Gemini Live Dynamic Sync & Official RPD Descending Order**: Toggle "Only list flash-lite and Gemma models"; dynamically sync available models directly from Google API; models are sorted strictly in descending order of Google's official free quota (**Gemma series at 14,400 RPD** prioritized at top, followed by **3.1/3.5 Flash-Lite at 500 RPD**, **2.5 Flash-Lite / Flash at 20 RPD**, and non-free models marked with 0 RPD); includes real-time RPD badges and link to Google AI Studio quota guidelines.
+        - **Quick Backup & Restore**: Dedicated "📤 Export" and "📥 Import" shortcut buttons right inside the AI settings header for immediate configuration portability.
        - Easily test connections with one click. API keys and configurations are 100% saved in the client browser (`localStorage`) for zero-leak privacy.
      - **Tutorial Guide Tab**:
        - A step-by-step interactive manual for newcomers covering 3-way synchronization, dual split-view, native smart beautifier, AI formatting redesign, voice reader, and PWA integration.
@@ -506,6 +513,7 @@ MD2HTML connects directly from your browser to official model APIs. Keys and pre
      - Click **"🔄 Fetch Live Models"** (or trigger automatically on successful connection test) to pull all available models from Google API.
      - Models are ranked **strictly by RPD descending** (e.g. `gemma-4-26b` / `gemma-2-27b-it` with **14,400 RPD** rank at top, `gemini-3.5-flash-lite` with **500 RPD**, `gemini-2.5-flash-lite` with **20 RPD**, and non-free tier models like `gemini-2.0-flash-lite` labeled as **0 RPD**). Badges display exact daily limits, alongside a **"View Quotas ↗"** link to Google AI Studio.
 6. Click **⚡ Test Connection**. Once you see `✅ Connection successful`, you are ready to beautify with AI!
+7. **Backup & Restore Configurations**: Click **"📤 Export"** in the AI Settings header or **"Export Settings (JSON)"** on the Preferences tab to download a backup file; on a new device or browser, click **"📥 Import"** to restore all provider keys, models, and personal preferences with a single click.
 
 ---
 

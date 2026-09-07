@@ -365,45 +365,147 @@ export const PROMPT_PRESETS = [
 ];
 
 // LocalStorage Keys
-const STORAGE_KEY_AI_CONFIG = 'md2html-ai-config';
-const STORAGE_KEY_SAVED_PROMPTS = 'md2html-saved-prompts';
-const STORAGE_KEY_LAST_PROMPT_ID = 'md2html-last-prompt-id';
+export const STORAGE_KEY_AI_CONFIG = 'md2html-ai-config';
+export const STORAGE_KEY_SAVED_PROMPTS = 'md2html-saved-prompts';
+export const STORAGE_KEY_LAST_PROMPT_ID = 'md2html-last-prompt-id';
 
-// Get AI Configuration
+// Default configurations per provider
+export const DEFAULT_PROVIDER_CONFIGS = {
+  openai: {
+    apiKey: '',
+    model: 'gpt-4o',
+    baseUrl: 'https://api.openai.com/v1',
+    customHeaders: ''
+  },
+  claude: {
+    apiKey: '',
+    model: 'claude-3-5-sonnet-20241022',
+    baseUrl: 'https://api.anthropic.com/v1',
+    customHeaders: ''
+  },
+  gemini: {
+    apiKey: '',
+    model: 'gemini-3.5-flash-lite',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    geminiOnlyLiteGemma: false
+  },
+  openrouter: {
+    apiKey: '',
+    model: 'google/gemini-2.0-flash-exp:free',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    openRouterOnlyFree: false
+  },
+  custom: {
+    apiKey: '',
+    model: 'deepseek-chat',
+    baseUrl: 'https://api.deepseek.com/v1',
+    customHeaders: ''
+  }
+};
+
+// Get AI Configuration with independent provider storage
 export const getAiConfig = () => {
+  let activeProvider = 'openai';
+  const providers = {
+    openai: { ...DEFAULT_PROVIDER_CONFIGS.openai },
+    claude: { ...DEFAULT_PROVIDER_CONFIGS.claude },
+    gemini: { ...DEFAULT_PROVIDER_CONFIGS.gemini },
+    openrouter: { ...DEFAULT_PROVIDER_CONFIGS.openrouter },
+    custom: { ...DEFAULT_PROVIDER_CONFIGS.custom }
+  };
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY_AI_CONFIG);
     if (raw) {
       const parsed = JSON.parse(raw);
-      return {
-        provider: parsed.provider || 'openai',
-        apiKey: parsed.apiKey || '',
-        model: parsed.model || 'gpt-4o',
-        baseUrl: parsed.baseUrl || 'https://api.openai.com/v1',
-        customHeaders: parsed.customHeaders || '',
-        openRouterOnlyFree: Boolean(parsed.openRouterOnlyFree),
-        geminiOnlyLiteGemma: Boolean(parsed.geminiOnlyLiteGemma)
-      };
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.provider && providers[parsed.provider]) {
+          activeProvider = parsed.provider;
+        }
+
+        if (parsed.providers && typeof parsed.providers === 'object') {
+          // New format: independent configs per provider
+          Object.keys(providers).forEach((pId) => {
+            if (parsed.providers[pId] && typeof parsed.providers[pId] === 'object') {
+              providers[pId] = {
+                ...providers[pId],
+                ...parsed.providers[pId]
+              };
+            }
+          });
+        } else {
+          // Backward compatibility for legacy single-config format:
+          // Migrate old single key/model/baseUrl into active provider
+          if (providers[activeProvider]) {
+            providers[activeProvider] = {
+              ...providers[activeProvider],
+              apiKey: parsed.apiKey || '',
+              model: parsed.model || providers[activeProvider].model,
+              baseUrl: parsed.baseUrl || providers[activeProvider].baseUrl,
+              customHeaders: parsed.customHeaders || '',
+              openRouterOnlyFree: Boolean(parsed.openRouterOnlyFree),
+              geminiOnlyLiteGemma: Boolean(parsed.geminiOnlyLiteGemma)
+            };
+          }
+        }
+      }
     }
   } catch (e) {
     console.warn('Failed to load AI config:', e);
   }
 
+  const activeConf = providers[activeProvider] || providers.openai;
+
   return {
-    provider: 'openai',
-    apiKey: '',
-    model: 'gpt-4o',
-    baseUrl: 'https://api.openai.com/v1',
-    customHeaders: '',
-    openRouterOnlyFree: false,
-    geminiOnlyLiteGemma: false
+    provider: activeProvider,
+    providers,
+    // Top-level mapped properties for backwards compatibility:
+    apiKey: activeConf.apiKey || '',
+    model: activeConf.model || '',
+    baseUrl: activeConf.baseUrl || '',
+    customHeaders: activeConf.customHeaders || '',
+    openRouterOnlyFree: Boolean(activeConf.openRouterOnlyFree),
+    geminiOnlyLiteGemma: Boolean(activeConf.geminiOnlyLiteGemma)
   };
 };
 
-// Save AI Configuration
+// Save AI Configuration with independent provider storage
 export const saveAiConfig = (config) => {
   try {
-    localStorage.setItem(STORAGE_KEY_AI_CONFIG, JSON.stringify(config));
+    if (!config || typeof config !== 'object') return;
+
+    const currentSaved = getAiConfig();
+    const activeProvider = config.provider || currentSaved.provider || 'openai';
+
+    const providers = {
+      ...(currentSaved.providers || DEFAULT_PROVIDER_CONFIGS),
+      ...(config.providers || {})
+    };
+
+    // Ensure active provider's specific config is updated with top-level fields
+    providers[activeProvider] = {
+      ...(providers[activeProvider] || DEFAULT_PROVIDER_CONFIGS[activeProvider] || {}),
+      apiKey: config.apiKey !== undefined ? config.apiKey : (providers[activeProvider]?.apiKey || ''),
+      model: config.model !== undefined ? config.model : (providers[activeProvider]?.model || ''),
+      baseUrl: config.baseUrl !== undefined ? config.baseUrl : (providers[activeProvider]?.baseUrl || ''),
+      customHeaders: config.customHeaders !== undefined ? config.customHeaders : (providers[activeProvider]?.customHeaders || ''),
+      openRouterOnlyFree: config.openRouterOnlyFree !== undefined ? Boolean(config.openRouterOnlyFree) : Boolean(providers[activeProvider]?.openRouterOnlyFree),
+      geminiOnlyLiteGemma: config.geminiOnlyLiteGemma !== undefined ? Boolean(config.geminiOnlyLiteGemma) : Boolean(providers[activeProvider]?.geminiOnlyLiteGemma)
+    };
+
+    const payload = {
+      provider: activeProvider,
+      providers,
+      // Mirror top-level fields
+      apiKey: providers[activeProvider].apiKey,
+      model: providers[activeProvider].model,
+      baseUrl: providers[activeProvider].baseUrl,
+      customHeaders: providers[activeProvider].customHeaders,
+      openRouterOnlyFree: Boolean(providers[activeProvider].openRouterOnlyFree),
+      geminiOnlyLiteGemma: Boolean(providers[activeProvider].geminiOnlyLiteGemma)
+    };
+
+    localStorage.setItem(STORAGE_KEY_AI_CONFIG, JSON.stringify(payload));
   } catch (e) {
     console.warn('Failed to save AI config:', e);
   }
