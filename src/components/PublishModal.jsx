@@ -12,84 +12,165 @@ import {
   savePublishHistoryItem
 } from '../utils/publishService';
 
-function extractInitialMeta(markdown) {
+function cleanInlineMarkdown(text) {
+  return (text || '')
+    .replace(/!\[.*?\]\(.*?\)/g, '')
+    .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    .replace(/(\*|_)(.*?)\1/g, '$2')
+    .replace(/`{1,3}(.*?)`{1,3}/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .trim();
+}
+
+function cleanHeadingText(text) {
+  return (text || '')
+    .replace(/^#+\s*/, '')
+    .replace(/^主題分享[:：\s]*/i, '')
+    .replace(/^[📌\-*•]\s*/, '')
+    .trim();
+}
+
+export function extractInitialMeta(markdown) {
   const lines = (markdown || '').split(/\r?\n/);
   let extractedTitle = '';
   const subHeadings = [];
   const contentParagraphs = [];
 
-  const cleanPrefix = (text) => {
-    return (text || '')
-      .replace(/^#+\s*/, '')
-      .replace(/^主題分享[:：\s]*/i, '')
-      .replace(/^[📌\-\*•\d\.\s]+/, '')
-      .trim();
+  let inCodeBlock = false;
+  let inFrontmatter = false;
+  let currentParagraph = [];
+
+  const flushParagraph = () => {
+    if (currentParagraph.length > 0) {
+      const text = currentParagraph.join(' ').trim();
+      if (text) {
+        contentParagraphs.push(text);
+      }
+      currentParagraph = [];
+    }
   };
 
   for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i].trim();
-    if (!rawLine) continue;
+    const rawLine = lines[i];
+    const trimmed = rawLine.trim();
 
-    // 檢查是不是 # 標題
-    if (rawLine.startsWith('# ')) {
-      const text = cleanPrefix(rawLine);
+    if (i === 0 && (trimmed === '---' || trimmed === '+++')) {
+      inFrontmatter = true;
+      continue;
+    }
+    if (inFrontmatter) {
+      if (trimmed === '---' || trimmed === '+++') {
+        inFrontmatter = false;
+      }
+      continue;
+    }
+
+    if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+      inCodeBlock = !inCodeBlock;
+      flushParagraph();
+      continue;
+    }
+    if (inCodeBlock) {
+      continue;
+    }
+
+    if (!trimmed) {
+      flushParagraph();
+      continue;
+    }
+
+    if (/^[-*_]{3,}$/.test(trimmed) || trimmed.startsWith('|') || trimmed.startsWith('>')) {
+      flushParagraph();
+      continue;
+    }
+
+    if (/^!\[.*?\]\(.*?\)$/.test(trimmed)) {
+      flushParagraph();
+      continue;
+    }
+
+    if (trimmed.startsWith('# ')) {
+      flushParagraph();
+      const text = cleanInlineMarkdown(cleanHeadingText(trimmed));
       if (!extractedTitle && text) {
         extractedTitle = text;
       }
-    } else if (rawLine.startsWith('## ') || rawLine.startsWith('### ')) {
-      const headingText = cleanPrefix(rawLine);
-      if (headingText && !subHeadings.includes(headingText) && subHeadings.length < 8) {
+      continue;
+    }
+
+    if (/^#{2,4}\s+/.test(trimmed)) {
+      flushParagraph();
+      const headingText = cleanInlineMarkdown(cleanHeadingText(trimmed));
+      if (headingText && !subHeadings.includes(headingText) && subHeadings.length < 10) {
         subHeadings.push(headingText);
       }
       if (!extractedTitle && headingText) {
         extractedTitle = headingText;
       }
-    } else if (!rawLine.startsWith('```') && !rawLine.startsWith('---') && !rawLine.startsWith('>')) {
-      const cleanLine = cleanPrefix(rawLine);
-      if (cleanLine) {
-        contentParagraphs.push(cleanLine);
+      continue;
+    }
+
+    if (/^📌\s+/.test(trimmed)) {
+      flushParagraph();
+      const bookmarkText = cleanInlineMarkdown(cleanHeadingText(trimmed));
+      if (bookmarkText && !subHeadings.includes(bookmarkText) && subHeadings.length < 10) {
+        subHeadings.push(bookmarkText);
       }
+      continue;
+    }
+
+    const cleanedLine = cleanInlineMarkdown(trimmed);
+    if (cleanedLine) {
+      currentParagraph.push(cleanedLine);
     }
   }
 
-  // 若標題仍為空或只有「主題分享：」，依指示跳過並提取下一段內容作為主題
+  flushParagraph();
+
   if (!extractedTitle && contentParagraphs.length > 0) {
     extractedTitle = contentParagraphs[0];
   }
-
   const finalTitle = extractedTitle || '未命名主題分享';
-  let finalDesc;
+
+  let finalBookmarks = '';
   if (subHeadings.length > 0) {
-    // 各主題/書籤文字分行顯示
+    finalBookmarks = subHeadings.map(h => `📌 ${h}`).join('\n');
+  }
+
+  let finalDesc = '';
+  const firstContent = contentParagraphs.find(p => p !== finalTitle);
+  if (firstContent) {
+    finalDesc = firstContent.length > 220 ? firstContent.slice(0, 215) + '...' : firstContent;
+  } else if (subHeadings.length > 0) {
     finalDesc = subHeadings.map(h => `📌 ${h}`).join('\n');
-  } else if (contentParagraphs.length > 1) {
-    finalDesc = contentParagraphs.slice(1, 4).join('\n');
-  } else if (contentParagraphs.length === 1 && contentParagraphs[0] !== finalTitle) {
-    finalDesc = contentParagraphs[0].slice(0, 100);
   } else {
     finalDesc = '點擊專屬短網址立即閱讀完整排版內容。';
   }
 
-  return { title: finalTitle, description: finalDesc };
+  return {
+    title: finalTitle,
+    bookmarks: finalBookmarks,
+    description: finalDesc
+  };
 }
 
-export function buildShareMessage({ title, description, url, password, isEncrypted }) {
+export function buildShareMessage({ title, bookmarks, description, url, password, isEncrypted }) {
   const parts = [];
   const cleanTitle = (title || '').replace(/^主題分享[:：\s]*/i, '').trim();
+  const cleanBookmarks = (bookmarks || '').trim();
   const cleanDesc = (description || '').trim();
 
   if (cleanTitle) {
     parts.push(cleanTitle);
-    if (cleanDesc && cleanDesc !== cleanTitle) {
-      parts.push(cleanDesc);
-    }
-  } else {
-    // 沒標題時，若有內文或書籤則分行顯示
-    if (cleanDesc) {
-      parts.push(cleanDesc);
-    } else {
-      parts.push('主題分享');
-    }
+  }
+
+  // 優先放置目錄書籤 (如 📌 1. ... 📌 2. ...)
+  if (cleanBookmarks) {
+    parts.push(cleanBookmarks);
+  } else if (cleanDesc && cleanDesc !== cleanTitle) {
+    // 若沒有目錄書籤，則放入內文簡介
+    parts.push(cleanDesc);
   }
 
   // 連結和文字分段 (以空行 \n\n 隔開)
@@ -123,6 +204,7 @@ function PublishModalContent({
   const initialMeta = extractInitialMeta(markdown);
   const [title, setTitle] = useState(initialMeta.title);
   const [description, setDescription] = useState(initialMeta.description);
+  const [bookmarks, setBookmarks] = useState(initialMeta.bookmarks);
   const [isEncrypted, setIsEncrypted] = useState(false);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -259,6 +341,7 @@ function PublishModalContent({
         url: result.url,
         title: effectiveTitle,
         description: description.trim(),
+        bookmarks: bookmarks ? bookmarks.trim() : '',
         isEncrypted,
         provider,
         secret: result.secret || null,
@@ -274,6 +357,8 @@ function PublishModalContent({
       setPublishedResult({
         ...result,
         title: historyItem.title,
+        bookmarks: historyItem.bookmarks,
+        description: historyItem.description,
         password: historyItem.password,
         provider
       });
@@ -298,10 +383,11 @@ function PublishModalContent({
   const handleSystemShare = async () => {
     if (!publishedResult) return;
     const shareUrl = publishedResult.url;
-    const shareTitle = publishedResult.title || title || '主題分享：';
+    const shareTitle = publishedResult.title || title || '未命名主題分享';
     const fullShareText = buildShareMessage({
       title: shareTitle,
-      description,
+      bookmarks: publishedResult.bookmarks ?? bookmarks,
+      description: publishedResult.description ?? description,
       url: shareUrl,
       password: publishedResult.password,
       isEncrypted: publishedResult.isEncrypted
@@ -400,10 +486,11 @@ function PublishModalContent({
                 </div>
               </div>
 
-              {/* Link Preview Card */}
+              {/* Link Preview Card (og:description / 連結下方預覽卡片) */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                  📱 社群預覽卡片外觀（在各通訊軟體呈現之效果）
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>📱 社群預覽卡片（Line 連結下方顯示之內容）</span>
+                  <span className="text-[10px] text-indigo-500 dark:text-indigo-400 font-normal">自動提取第一段內文摘要</span>
                 </label>
                 <div className="p-3.5 rounded-xl border border-indigo-100 dark:border-indigo-950/60 bg-gradient-to-br from-indigo-50/40 via-purple-50/20 to-slate-50/40 dark:from-indigo-950/20 dark:via-slate-900/40 dark:to-slate-950/40 space-y-2">
                   <div>
@@ -420,16 +507,31 @@ function PublishModalContent({
                     <textarea
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      placeholder="文章章節書籤與簡介摘要..."
+                      placeholder="連結下方卡片預覽文字（第一段內文摘要）..."
                       rows="3"
                       className="w-full text-xs text-slate-600 dark:text-slate-400 bg-transparent resize-y border-none p-0 focus:outline-none leading-relaxed whitespace-pre-wrap font-sans"
                     />
                   </div>
                   <div className="flex items-center justify-between pt-1 border-t border-indigo-100/60 dark:border-indigo-900/40 text-[10px] text-slate-400">
-                    <span>🔗 支援各通訊軟體卡片預覽</span>
+                    <span>🔗 支援 Line、FB 等連結預覽卡片 (og:description)</span>
                     <span>{isEncrypted ? '🔒 已啟用密碼' : '🌐 公開閱讀'}</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Bookmarks / Subheadings for Chat Message (Line 文字訊息區塊) */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>📌 訊息附帶目錄書籤（Line 文字訊息區塊）</span>
+                  <span className="text-[10px] text-slate-400 font-normal">隨文字發送，不與連結卡片重複</span>
+                </label>
+                <textarea
+                  value={bookmarks}
+                  onChange={(e) => setBookmarks(e.target.value)}
+                  placeholder="可輸入目錄書籤重點，例如：📌 1. 每月固定提供的「實質額度」..."
+                  rows="3"
+                  className="w-full text-xs text-slate-700 dark:text-slate-300 bg-slate-50/70 dark:bg-slate-850/60 p-2.5 rounded-xl border border-slate-200/70 dark:border-slate-800 resize-y focus:outline-none focus:border-indigo-500 leading-relaxed font-sans"
+                />
               </div>
 
               {/* Password Protection Toggle */}
@@ -705,8 +807,46 @@ function PublishModalContent({
                 </div>
               )}
 
+              {/* Share Message & Preview Card */}
+              <div className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-850/50 text-left space-y-2 text-xs font-sans">
+                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 flex items-center justify-between">
+                  <span>💬 完整分享訊息預覽（傳送至 Line 等 App）</span>
+                  <span className="text-indigo-500 dark:text-indigo-400 font-medium">一鍵複製即可貼上</span>
+                </div>
+                <div className="space-y-1.5 bg-white/80 dark:bg-slate-900/80 p-3 rounded-lg border border-slate-200/60 dark:border-slate-800/60 shadow-xs">
+                  <div className="font-extrabold text-slate-800 dark:text-slate-100 text-xs sm:text-sm">
+                    {publishedResult.title}
+                  </div>
+                  {(publishedResult.bookmarks ?? bookmarks) && (
+                    <div className="text-slate-600 dark:text-slate-300 text-xs whitespace-pre-line leading-relaxed font-medium">
+                      {publishedResult.bookmarks ?? bookmarks}
+                    </div>
+                  )}
+                  <div className="text-xs font-mono text-indigo-600 dark:text-indigo-400 break-all pt-0.5">
+                    {publishedResult.url}
+                  </div>
+                  {publishedResult.isEncrypted && publishedResult.password && (
+                    <div className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                      🔒 閱讀密碼：{publishedResult.password}
+                    </div>
+                  )}
+                </div>
+
+                {(publishedResult.description ?? description) && (
+                  <div className="p-2.5 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100/80 dark:border-indigo-900/40 text-[11px] text-slate-600 dark:text-slate-400 space-y-0.5">
+                    <div className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                      <span>🔗</span>
+                      <span>Line 連結下方顯示的卡片摘要：</span>
+                    </div>
+                    <div className="line-clamp-2 leading-relaxed">
+                      {publishedResult.description ?? description}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Share Actions */}
-              <div className="space-y-2 pt-2">
+              <div className="space-y-2 pt-1">
                 <button
                   onClick={handleSystemShare}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all active:scale-98"
@@ -719,7 +859,8 @@ function PublishModalContent({
                   onClick={() => {
                     const fullShareText = buildShareMessage({
                       title: publishedResult.title,
-                      description,
+                      bookmarks: publishedResult.bookmarks ?? bookmarks,
+                      description: publishedResult.description ?? description,
                       url: publishedResult.url,
                       password: publishedResult.password,
                       isEncrypted: publishedResult.isEncrypted

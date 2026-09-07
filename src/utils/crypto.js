@@ -95,7 +95,8 @@ export async function buildPublishableHTML({
   hasMermaid = false
 }) {
   const safeTitle = escapeHtml(title);
-  const safeDesc = escapeHtml(description || title);
+  const cleanDesc = (description || title).replace(/\r?\n+/g, ' ').trim();
+  const safeDesc = escapeHtml(cleanDesc);
 
   // Generate plain TOC HTML
   let tocHtml = '';
