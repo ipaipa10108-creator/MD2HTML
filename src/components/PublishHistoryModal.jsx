@@ -10,6 +10,66 @@ import {
   getSavedGitHubConfig
 } from '../utils/publishService';
 
+// 解析並取得歷史記錄中更有辨識度的主題與副標題
+export function resolveHistoryItemInfo(item) {
+  const rawTitle = (item?.title || '').trim();
+  const rawDesc = (item?.description || '').trim();
+
+  // 清除常見前綴（如「主題分享：」、「主題分享:」、「主題分享」、Markdown標題或清單符號）
+  const cleanPrefix = (text) => {
+    return (text || '')
+      .replace(/^主題分享[:：\s]*/i, '')
+      .replace(/^[📌#\-\*•\d\.\s]+/, '')
+      .trim();
+  };
+
+  const cleanedTitle = cleanPrefix(rawTitle);
+
+  // 1. 如果原始標題除去「主題分享：」後有明確主題文字，以此為主標題
+  if (cleanedTitle) {
+    const cleanedDesc = rawDesc && rawDesc !== rawTitle && cleanPrefix(rawDesc) !== cleanedTitle
+      ? rawDesc.split(/\r?\n/).map(l => cleanPrefix(l)).filter(Boolean).slice(0, 2).join(' · ')
+      : '';
+    return {
+      title: cleanedTitle,
+      subtitle: cleanedDesc,
+      hasRealTitle: true
+    };
+  }
+
+  // 2. 若原始標題僅有「主題分享：」或為空，跳過並提取下一段內容
+  if (rawDesc) {
+    const descLines = rawDesc
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean);
+
+    const validSegments = [];
+    for (const line of descLines) {
+      const c = cleanPrefix(line);
+      if (c) {
+        validSegments.push(c);
+      }
+    }
+
+    if (validSegments.length > 0) {
+      return {
+        title: validSegments[0],
+        subtitle: validSegments.length > 1 ? validSegments.slice(1, 3).join(' · ') : '',
+        hasRealTitle: true
+      };
+    }
+  }
+
+  // 3. 回退：若無描述內容，提取短網址後綴或預設說明
+  const urlSuffix = item?.url ? item.url.split('/').filter(Boolean).pop() : '';
+  return {
+    title: urlSuffix ? `線上發布文件 (${urlSuffix})` : '未命名發布文件',
+    subtitle: '',
+    hasRealTitle: false
+  };
+}
+
 export default function PublishHistoryModal({ isOpen, onClose, showToast }) {
   if (!isOpen) return null;
   return <PublishHistoryModalContent onClose={onClose} showToast={showToast} />;
@@ -29,8 +89,12 @@ function PublishHistoryModalContent({ onClose, showToast }) {
   const filteredHistory = history.filter(item => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
+    const { title, subtitle } = resolveHistoryItemInfo(item);
     return (
       (item.title && item.title.toLowerCase().includes(q)) ||
+      (title && title.toLowerCase().includes(q)) ||
+      (subtitle && subtitle.toLowerCase().includes(q)) ||
+      (item.description && item.description.toLowerCase().includes(q)) ||
       (item.url && item.url.toLowerCase().includes(q)) ||
       (item.provider && item.provider.toLowerCase().includes(q))
     );
@@ -48,8 +112,9 @@ function PublishHistoryModalContent({ onClose, showToast }) {
   const handleDelete = async (item) => {
     const isGitHub = item.provider === 'github';
     const providerName = isGitHub ? 'GitHub Pages' : 'Cloudflare Workers KV';
+    const { title: displayTitle } = resolveHistoryItemInfo(item);
 
-    const confirmDelete = window.confirm(`確定要從 ${providerName} 刪除下架《${item.title}》嗎？\n\n刪除後該網址將立即失效無法存取。`);
+    const confirmDelete = window.confirm(`確定要從 ${providerName} 刪除下架《${displayTitle}》嗎？\n\n刪除後該網址將立即失效無法存取。`);
     if (!confirmDelete) return;
 
     setDeletingId(item.id);
@@ -83,7 +148,7 @@ function PublishHistoryModalContent({ onClose, showToast }) {
 
       removePublishHistoryItem(item.id);
       refreshHistory();
-      showToast(`✅ 《${item.title}》已成功從 ${providerName} 下架刪除！`, 'success');
+      showToast(`✅ 《${displayTitle}》已成功從 ${providerName} 下架刪除！`, 'success');
     } catch (err) {
       console.warn('Delete failed:', err);
       const removeLocal = window.confirm(`雲端回報：${err.message}\n\n是否仍要從本機記錄中移除此項目？`);
@@ -299,80 +364,93 @@ function PublishHistoryModalContent({ onClose, showToast }) {
 
               const isDeleting = deletingId === item.id;
               const isGitHub = item.provider === 'github';
+              const { title: displayTitle, subtitle: displaySubtitle } = resolveHistoryItemInfo(item);
 
               return (
                 <div
                   key={item.id}
                   className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-white/60 dark:bg-slate-900/60 hover:border-indigo-200 dark:hover:border-indigo-900 transition-all space-y-2.5"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {/* Provider Badge */}
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
-                          isGitHub
-                            ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200/60 dark:border-purple-800/60'
-                            : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200/60 dark:border-blue-800/60'
-                        }`}>
-                          {isGitHub ? '🐙 GitHub' : '☁️ CF KV'}
+                  {/* 頂部列：平台與加密狀態標籤 (左) + 快捷按鈕 (右) */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {/* Provider Badge */}
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                        isGitHub
+                          ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200/60 dark:border-purple-800/60'
+                          : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200/60 dark:border-blue-800/60'
+                      }`}>
+                        {isGitHub ? '🐙 GitHub' : '☁️ CF KV'}
+                      </span>
+
+                      {/* Encrypted Badge */}
+                      {item.isEncrypted ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
+                          🔒 密碼保護
                         </span>
-
-                        {/* Encrypted Badge */}
-                        {item.isEncrypted ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
-                            🔒 密碼保護
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
-                            🌐 公開
-                          </span>
-                        )}
-
-                        <h4 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100 truncate">
-                          {item.title}
-                        </h4>
-                      </div>
-                      <div className="text-[11px] text-slate-400 flex items-center gap-2">
-                        <span>🕒 {formattedDate}</span>
-                        {item.isEncrypted && item.password && (
-                          <span className="text-amber-600 dark:text-amber-400 font-mono">
-                            🔑 密碼: {item.password}
-                          </span>
-                        )}
-                      </div>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
+                          🌐 公開
+                        </span>
+                      )}
                     </div>
 
                     {/* Action buttons */}
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={() => handleCopy(item.url, '📋 短網址已複製！')}
-                        className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg text-xs transition-all"
+                        className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
                         title="複製網址"
                       >
-                        📋 複製
+                        <span>📋</span>
+                        <span>複製</span>
                       </button>
                       <a
                         href={item.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg text-xs transition-all"
+                        className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
                         title="在新分頁開啟"
                       >
-                        🔗 開啟
+                        <span>🔗</span>
+                        <span>開啟</span>
                       </a>
                       <button
                         onClick={() => handleDelete(item)}
                         disabled={isDeleting}
-                        className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg text-xs transition-all disabled:opacity-40"
+                        className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg text-xs font-semibold transition-all disabled:opacity-40 flex items-center gap-1"
                         title="下架刪除此文件"
                       >
-                        {isDeleting ? '⏳' : '🗑️ 刪除'}
+                        <span>{isDeleting ? '⏳' : '🗑️'}</span>
+                        <span>刪除</span>
                       </button>
                     </div>
                   </div>
 
+                  {/* 標題列：獨立佔滿整行，避免被按鈕或標籤排擠截斷 */}
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100 leading-snug break-words">
+                      {displayTitle}
+                    </h4>
+                    {displaySubtitle && (
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed break-words bg-slate-50/70 dark:bg-slate-800/40 px-2.5 py-1.5 rounded-lg border border-slate-100/80 dark:border-slate-800/60">
+                        {displaySubtitle}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* 資訊列：發布時間與密碼 */}
+                  <div className="text-[11px] text-slate-400 flex items-center justify-between flex-wrap gap-2">
+                    <span>🕒 {formattedDate}</span>
+                    {item.isEncrypted && item.password && (
+                      <span className="text-amber-600 dark:text-amber-400 font-mono text-xs font-bold bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200/50 dark:border-amber-800/50">
+                        🔑 密碼: {item.password}
+                      </span>
+                    )}
+                  </div>
+
                   {/* URL Display */}
-                  <div className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400 bg-slate-50 dark:bg-slate-800/50 px-2.5 py-1 rounded-md truncate select-all">
+                  <div className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400 bg-slate-50 dark:bg-slate-800/50 px-2.5 py-1.5 rounded-lg truncate select-all border border-slate-100 dark:border-slate-800/60">
                     {item.url}
                   </div>
                 </div>

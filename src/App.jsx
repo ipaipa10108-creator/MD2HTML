@@ -4510,7 +4510,7 @@ export default function App() {
           </button>
           
           {activePdfDropdown === 'mobile-pdf' && (
-            <div className="absolute left-0 mt-8 w-56 max-w-[calc(100vw-32px)] rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xl z-40 p-1 flex flex-col gap-0.5 animate-fade-in">
+            <div className="absolute right-0 mt-8 w-60 max-w-[calc(100vw-24px)] rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xl z-50 p-1 flex flex-col gap-0.5 animate-fade-in">
               <button
                 onClick={() => {
                   handleExportPDF('download');

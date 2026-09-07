@@ -16,30 +16,58 @@ function extractInitialMeta(markdown) {
   const lines = (markdown || '').split(/\r?\n/);
   let extractedTitle = '';
   const subHeadings = [];
+  const contentParagraphs = [];
+
+  const cleanPrefix = (text) => {
+    return (text || '')
+      .replace(/^#+\s*/, '')
+      .replace(/^主題分享[:：\s]*/i, '')
+      .replace(/^[📌\-\*•\d\.\s]+/, '')
+      .trim();
+  };
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!extractedTitle && line.startsWith('# ')) {
-      extractedTitle = line.replace(/^#\s+/, '').trim();
-    } else if (line.startsWith('## ') || line.startsWith('### ')) {
-      const headingText = line.replace(/^#{2,3}\s+/, '').trim();
+    const rawLine = lines[i].trim();
+    if (!rawLine) continue;
+
+    // 檢查是不是 # 標題
+    if (rawLine.startsWith('# ')) {
+      const text = cleanPrefix(rawLine);
+      if (!extractedTitle && text) {
+        extractedTitle = text;
+      }
+    } else if (rawLine.startsWith('## ') || rawLine.startsWith('### ')) {
+      const headingText = cleanPrefix(rawLine);
       if (headingText && !subHeadings.includes(headingText) && subHeadings.length < 8) {
         subHeadings.push(headingText);
+      }
+      if (!extractedTitle && headingText) {
+        extractedTitle = headingText;
+      }
+    } else if (!rawLine.startsWith('```') && !rawLine.startsWith('---') && !rawLine.startsWith('>')) {
+      const cleanLine = cleanPrefix(rawLine);
+      if (cleanLine) {
+        contentParagraphs.push(cleanLine);
       }
     }
   }
 
-  const finalTitle = extractedTitle || '主題分享：';
+  // 若標題仍為空或只有「主題分享：」，依指示跳過並提取下一段內容作為主題
+  if (!extractedTitle && contentParagraphs.length > 0) {
+    extractedTitle = contentParagraphs[0];
+  }
+
+  const finalTitle = extractedTitle || '未命名主題分享';
   let finalDesc;
   if (subHeadings.length > 0) {
     // 各主題/書籤文字分行顯示
     finalDesc = subHeadings.map(h => `📌 ${h}`).join('\n');
+  } else if (contentParagraphs.length > 1) {
+    finalDesc = contentParagraphs.slice(1, 4).join('\n');
+  } else if (contentParagraphs.length === 1 && contentParagraphs[0] !== finalTitle) {
+    finalDesc = contentParagraphs[0].slice(0, 100);
   } else {
-    const firstParagraph = lines.find(l => {
-      const trimmed = l.trim();
-      return trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('`') && !trimmed.startsWith('>') && !trimmed.startsWith('-');
-    }) || '';
-    finalDesc = firstParagraph.slice(0, 100) || '點擊專屬短網址立即閱讀完整排版內容。';
+    finalDesc = '點擊專屬短網址立即閱讀完整排版內容。';
   }
 
   return { title: finalTitle, description: finalDesc };
@@ -47,20 +75,20 @@ function extractInitialMeta(markdown) {
 
 export function buildShareMessage({ title, description, url, password, isEncrypted }) {
   const parts = [];
-  const cleanTitle = (title || '').trim();
+  const cleanTitle = (title || '').replace(/^主題分享[:：\s]*/i, '').trim();
   const cleanDesc = (description || '').trim();
 
-  if (cleanTitle && cleanTitle !== '主題分享：') {
+  if (cleanTitle) {
     parts.push(cleanTitle);
     if (cleanDesc && cleanDesc !== cleanTitle) {
       parts.push(cleanDesc);
     }
   } else {
-    // 沒標題時，標示「主題分享：」並分行顯示內文或書籤
+    // 沒標題時，若有內文或書籤則分行顯示
     if (cleanDesc) {
-      parts.push(`主題分享：\n${cleanDesc}`);
+      parts.push(cleanDesc);
     } else {
-      parts.push('主題分享：');
+      parts.push('主題分享');
     }
   }
 
@@ -185,9 +213,15 @@ function PublishModalContent({
       const { articleContentHtml, exportedHeadings } = generateExportData();
       const hasMermaid = markdown.includes('```mermaid');
 
+      const cleanSubmittedTitle = title.replace(/^主題分享[:：\s]*/i, '').trim();
+      const firstValidDesc = (description || '').split(/\r?\n/)
+        .map(l => l.replace(/^[📌#\-\*•\d\.\s]+/, '').replace(/^主題分享[:：\s]*/i, '').trim())
+        .find(Boolean);
+      const effectiveTitle = cleanSubmittedTitle || firstValidDesc || '未命名主題分享';
+
       // Build standalone HTML with embedded lock screen if encrypted
       const fullHtml = await buildPublishableHTML({
-        title: title.trim() || '主題分享：',
+        title: effectiveTitle,
         description: description.trim(),
         articleContentHtml,
         exportedHeadings,
@@ -202,7 +236,7 @@ function PublishModalContent({
         saveWorkerUrl(workerUrl.trim());
         result = await uploadToWorker(workerUrl.trim(), {
           html: fullHtml,
-          title: title.trim() || '主題分享：',
+          title: effectiveTitle,
           description: description.trim(),
           isEncrypted
         });
@@ -213,7 +247,7 @@ function PublishModalContent({
           owner: githubConfig.owner.trim(),
           repo: githubConfig.repo.trim() || 'html-shares',
           html: fullHtml,
-          title: title.trim() || '主題分享：',
+          title: effectiveTitle,
           description: description.trim(),
           isEncrypted
         });
@@ -223,7 +257,7 @@ function PublishModalContent({
       const historyItem = {
         id: result.id,
         url: result.url,
-        title: title.trim() || '主題分享：',
+        title: effectiveTitle,
         description: description.trim(),
         isEncrypted,
         provider,
@@ -377,7 +411,7 @@ function PublishModalContent({
                       type="text"
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
-                      placeholder="分享主題標題 (預設：主題分享：)..."
+                      placeholder="分享主題標題 (例如：Google AI Pro 完整權益整理)..."
                       className="w-full text-sm font-bold text-slate-800 dark:text-slate-100 bg-transparent border-b border-indigo-200/60 dark:border-indigo-800/60 pb-1 focus:outline-none focus:border-indigo-500"
                       required
                     />
