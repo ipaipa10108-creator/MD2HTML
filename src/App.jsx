@@ -13,6 +13,12 @@ import AiBeautifyModal from './components/AiBeautifyModal';
 import VoicePlayerBar from './components/VoicePlayerBar';
 import {
   AI_PROVIDERS,
+  OPENROUTER_FREE_MODELS,
+  GEMINI_LITE_GEMMA_MODELS,
+  fetchGeminiLiveModels,
+  getCachedGeminiLiveModels,
+  fetchOpenRouterLiveFreeModels,
+  getCachedOpenRouterLiveFreeModels,
   getAiConfig,
   saveAiConfig,
   testAiConnection
@@ -1236,6 +1242,60 @@ export default function App() {
   const [testingAiConnection, setTestingAiConnection] = useState(false);
   const [aiConnectionResult, setAiConnectionResult] = useState(null);
 
+  // Live Fetched Models State
+  const [geminiLiveModels, setGeminiLiveModels] = useState(() => getCachedGeminiLiveModels() || GEMINI_LITE_GEMMA_MODELS);
+  const [isFetchingGeminiModels, setIsFetchingGeminiModels] = useState(false);
+  const [geminiFetchStatus, setGeminiFetchStatus] = useState(() => getCachedGeminiLiveModels() ? 'cached' : null);
+
+  const [openRouterLiveFreeModels, setOpenRouterLiveFreeModels] = useState(() => getCachedOpenRouterLiveFreeModels() || OPENROUTER_FREE_MODELS.map(m => ({ id: m, name: m })));
+  const [isFetchingOpenRouterModels, setIsFetchingOpenRouterModels] = useState(false);
+  const [openRouterFetchStatus, setOpenRouterFetchStatus] = useState(() => getCachedOpenRouterLiveFreeModels() ? 'cached' : null);
+
+  const handleFetchGeminiModels = async (keyOverride = null) => {
+    const keyToUse = (keyOverride || aiSettings.apiKey || '').trim();
+    if (!keyToUse) {
+      showToast('請先填入 Gemini API Key 才能即時取得模型清單', 'info');
+      return;
+    }
+    setIsFetchingGeminiModels(true);
+    try {
+      const models = await fetchGeminiLiveModels(keyToUse, aiSettings.baseUrl);
+      setGeminiLiveModels(models);
+      setGeminiFetchStatus('success');
+      showToast(`✅ 已即時從 Google API 同步 ${models.length} 款可用模型！`, 'success');
+      if (aiSettings.geminiOnlyLiteGemma) {
+        const liteList = models.filter(m => m.isLiteOrGemma);
+        if (liteList.length > 0 && !liteList.some(m => m.id === aiSettings.model)) {
+          handleAiSettingsChange({ ...aiSettings, model: liteList[0].id });
+        }
+      }
+    } catch (err) {
+      console.warn('Fetch Gemini models error:', err);
+      setGeminiFetchStatus('error');
+      showToast(`即時獲取失敗: ${err.message}`, 'error');
+    } finally {
+      setIsFetchingGeminiModels(false);
+    }
+  };
+
+  const handleFetchOpenRouterFreeModels = async () => {
+    setIsFetchingOpenRouterModels(true);
+    try {
+      const freeModels = await fetchOpenRouterLiveFreeModels();
+      setOpenRouterLiveFreeModels(freeModels);
+      setOpenRouterFetchStatus('success');
+      showToast(`✅ 已即時從 OpenRouter 同步 ${freeModels.length} 款免費模型！`, 'success');
+      if (aiSettings.openRouterOnlyFree && freeModels.length > 0 && !freeModels.some(m => m.id === aiSettings.model)) {
+        handleAiSettingsChange({ ...aiSettings, model: freeModels[0].id });
+      }
+    } catch (err) {
+      console.warn('Fetch OpenRouter models error:', err);
+      showToast(`即時獲取失敗: ${err.message}`, 'error');
+    } finally {
+      setIsFetchingOpenRouterModels(false);
+    }
+  };
+
   const handleOpenSettings = (initialTab = 'settings') => {
     setSettingsTab(typeof initialTab === 'string' ? initialTab : 'settings');
     setSettingsProvider(getActiveProvider());
@@ -1261,6 +1321,12 @@ export default function App() {
     try {
       await testAiConnection(aiSettings);
       setAiConnectionResult({ success: true, msg: '連線成功！API 金鑰有效且模型回應正常。' });
+      // Auto fetch live models on successful test connection
+      if (aiSettings.provider === 'gemini') {
+        handleFetchGeminiModels();
+      } else if (aiSettings.provider === 'openrouter') {
+        handleFetchOpenRouterFreeModels();
+      }
     } catch (err) {
       setAiConnectionResult({ success: false, msg: err.message || '連線失敗' });
     } finally {
@@ -5616,11 +5682,17 @@ export default function App() {
                             key={p.id}
                             type="button"
                             onClick={() => {
+                              let defaultM = p.defaultModel;
+                              if (p.id === 'openrouter' && aiSettings.openRouterOnlyFree) {
+                                defaultM = OPENROUTER_FREE_MODELS[0];
+                              } else if (p.id === 'gemini' && aiSettings.geminiOnlyLiteGemma) {
+                                defaultM = GEMINI_LITE_GEMMA_MODELS[0].id;
+                              }
                               const newCfg = {
                                 ...aiSettings,
                                 provider: p.id,
                                 baseUrl: p.defaultBaseUrl,
-                                model: p.defaultModel
+                                model: defaultM
                               };
                               handleAiSettingsChange(newCfg);
                               setAiConnectionResult(null);
@@ -5690,31 +5762,239 @@ export default function App() {
 
                       {/* Model */}
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                          模型名稱 (Model)
-                        </label>
-                        {/* Preset quick pills */}
-                        <div className="flex flex-wrap gap-1 mb-1.5">
-                          {AI_PROVIDERS.find(p => p.id === aiSettings.provider)?.models.map((m) => (
-                            <button
-                              key={m}
-                              type="button"
-                              onClick={() => handleAiSettingsChange({ ...aiSettings, model: m })}
-                              className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded border transition-all ${
-                                aiSettings.model === m
-                                  ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 border-indigo-400 dark:border-indigo-700'
-                                  : 'bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
-                              }`}
-                            >
-                              {m}
-                            </button>
-                          ))}
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400">
+                            模型名稱 (Model)
+                          </label>
+                          <span className="text-[10px] text-slate-400 truncate max-w-[200px]">
+                            目前選取：<code className="text-indigo-600 dark:text-indigo-400 font-mono font-bold">{aiSettings.model || '未指定'}</code>
+                          </span>
                         </div>
+
+                        {/* OpenRouter Free Models Filter & Link */}
+                        {aiSettings.provider === 'openrouter' && (
+                          <div className="space-y-2 mb-2 p-2.5 rounded-lg bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/70 dark:border-indigo-900/60">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-200">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(aiSettings.openRouterOnlyFree)}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    let nextModel = aiSettings.model;
+                                    const freeIds = openRouterLiveFreeModels.map(m => m.id);
+                                    if (checked && !freeIds.includes(aiSettings.model) && freeIds.length > 0) {
+                                      nextModel = freeIds[0];
+                                    }
+                                    handleAiSettingsChange({
+                                      ...aiSettings,
+                                      openRouterOnlyFree: checked,
+                                      model: nextModel
+                                    });
+                                  }}
+                                  className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500/30 accent-indigo-500"
+                                />
+                                <span className="flex items-center gap-1">
+                                  <span>🆓</span>
+                                  <span>僅列出 open router free model</span>
+                                </span>
+                              </label>
+
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={handleFetchOpenRouterFreeModels}
+                                  disabled={isFetchingOpenRouterModels}
+                                  className="px-2 py-0.5 text-[11px] font-bold rounded bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 shadow-2xs transition-all flex items-center gap-1 disabled:opacity-50"
+                                  title="向 OpenRouter API 即時發送請求獲取最新免費模型清單"
+                                >
+                                  <span className={isFetchingOpenRouterModels ? 'animate-spin' : ''}>🔄</span>
+                                  <span>{isFetchingOpenRouterModels ? '抓取中...' : '即時抓取免費模型'}</span>
+                                </button>
+
+                                <a
+                                  href="https://openrouter.ai/models"
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 shadow-2xs transition-all"
+                                  title="在新分頁開啟 Open Router Model 官方頁面"
+                                >
+                                  <span>開啟 Open Router Model ↗</span>
+                                </a>
+                              </div>
+                            </div>
+
+                            {openRouterFetchStatus && (
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                                <span>即時同步狀態：已載入 {openRouterLiveFreeModels.length} 款免費模型</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Gemini Flash-Lite and Gemma Filter */}
+                        {aiSettings.provider === 'gemini' && (
+                          <div className="space-y-2 mb-2 p-2.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-900/60">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-200">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(aiSettings.geminiOnlyLiteGemma)}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    let nextModel = aiSettings.model;
+                                    const liteGemmaList = geminiLiveModels
+                                      .filter(m => m.isLiteOrGemma || /flash[-_]?lite|gemma/i.test(m.id))
+                                      .sort((a, b) => {
+                                        const rpdDiff = (b.rpd ?? 0) - (a.rpd ?? 0);
+                                        if (rpdDiff !== 0) return rpdDiff;
+                                        return (b.rpm ?? 0) - (a.rpm ?? 0);
+                                      });
+                                    if (checked && !liteGemmaList.some(m => m.id === aiSettings.model) && liteGemmaList.length > 0) {
+                                      nextModel = liteGemmaList[0].id;
+                                    }
+                                    handleAiSettingsChange({
+                                      ...aiSettings,
+                                      geminiOnlyLiteGemma: checked,
+                                      model: nextModel
+                                    });
+                                  }}
+                                  className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-700 text-emerald-600 focus:ring-emerald-500/30 accent-emerald-500"
+                                />
+                                <span className="flex items-center gap-1">
+                                  <span>⚡</span>
+                                  <span>僅列出 flash-lite 和 Gemma 模型</span>
+                                </span>
+                              </label>
+
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleFetchGeminiModels()}
+                                  disabled={isFetchingGeminiModels || !aiSettings.apiKey?.trim()}
+                                  className="px-2 py-0.5 text-[11px] font-bold rounded bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 shadow-2xs transition-all flex items-center gap-1 disabled:opacity-50"
+                                  title="向 Google API 發送即時請求，抓取您 API Key 可用的最新官方模型清單與配額"
+                                >
+                                  <span className={isFetchingGeminiModels ? 'animate-spin' : ''}>🔄</span>
+                                  <span>{isFetchingGeminiModels ? '抓取中...' : '即時抓取最新模型'}</span>
+                                </button>
+
+                                <a
+                                  href="https://aistudio.google.com/app/plan_information"
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:underline bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 shadow-2xs transition-all"
+                                  title="前往 Google AI Studio 查看官方即時配額說明"
+                                >
+                                  <span>查看配額 ↗</span>
+                                </a>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                              <span className="flex items-center gap-1">
+                                <span className={`w-1.5 h-1.5 rounded-full inline-block ${geminiFetchStatus === 'success' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                                <span>{geminiFetchStatus === 'success' ? `已即時同步 Google API 模型 (共 ${geminiLiveModels.length} 款)` : '點擊「即時抓取最新模型」可直接向 Google 同步最新模型'}</span>
+                              </span>
+                              <span className="text-emerald-700 dark:text-emerald-300 font-bold">
+                                依 RPD 高到低排列 (Gemma 14.4K ➔ Flash-Lite 500 ➔ 2.5 Flash 20) ⬇
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Preset quick pills / selector */}
+                        {aiSettings.provider === 'openrouter' && aiSettings.openRouterOnlyFree ? (
+                          <div className="space-y-1.5 mb-2">
+                            <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-1.5 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-200/60 dark:border-slate-800">
+                              {openRouterLiveFreeModels.map((item) => {
+                                const mId = item.id || item;
+                                return (
+                                  <button
+                                    key={mId}
+                                    type="button"
+                                    onClick={() => handleAiSettingsChange({ ...aiSettings, model: mId })}
+                                    className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded border transition-all flex items-center gap-1 ${
+                                      aiSettings.model === mId
+                                        ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 border-indigo-400 dark:border-indigo-700 shadow-2xs'
+                                        : 'bg-white dark:bg-slate-850 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                    }`}
+                                    title={item.name || mId}
+                                  >
+                                    <span>{mId}</span>
+                                    <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-sans font-bold">
+                                      FREE
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : aiSettings.provider === 'gemini' && aiSettings.geminiOnlyLiteGemma ? (
+                          <div className="space-y-1.5 mb-2">
+                            <div className="flex flex-wrap gap-1 p-1.5 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-200/60 dark:border-slate-800 max-h-36 overflow-y-auto">
+                              {geminiLiveModels
+                                .filter(m => m.isLiteOrGemma || /flash[-_]?lite|gemma/i.test(m.id))
+                                .sort((a, b) => {
+                                  const rpdDiff = (b.rpd ?? 0) - (a.rpd ?? 0);
+                                  if (rpdDiff !== 0) return rpdDiff;
+                                  return (b.rpm ?? 0) - (a.rpm ?? 0);
+                                })
+                                .map((item) => (
+                                  <button
+                                    key={item.id}
+                                    type="button"
+                                    onClick={() => handleAiSettingsChange({ ...aiSettings, model: item.id })}
+                                    className={`px-2 py-1 text-[10px] font-mono font-bold rounded border transition-all flex items-center gap-1.5 ${
+                                      aiSettings.model === item.id
+                                        ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-400 dark:border-emerald-700 shadow-2xs'
+                                        : 'bg-white dark:bg-slate-850 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                    }`}
+                                    title={`${item.name || item.id} · ${item.isUnlimited ? 'Unlimited' : (item.rpd ?? 0).toLocaleString()} RPD (每日免費請求上限) · ${item.isUnlimited ? 'Unlimited' : (item.rpm ?? 0)} RPM`}
+                                  >
+                                    <span>{item.id}</span>
+                                    <span className={`text-[9px] px-1 py-0.2 rounded font-sans font-bold ${
+                                      aiSettings.model === item.id
+                                        ? 'bg-emerald-200/80 dark:bg-emerald-800/80 text-emerald-900 dark:text-emerald-100'
+                                        : (item.rpd >= 10000 ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200' :
+                                           item.rpd >= 500 ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300' :
+                                           item.rpd > 0 ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300' :
+                                           'bg-rose-100/80 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400')
+                                    }`}>
+                                      {item.isUnlimited ? 'Unlimited RPD' : `${(item.rpd ?? 0).toLocaleString()} RPD`}
+                                    </span>
+                                  </button>
+                                ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-1 mb-1.5">
+                            {(aiSettings.provider === 'gemini' && geminiLiveModels.length > 0
+                              ? geminiLiveModels.slice(0, 10).map(m => m.id)
+                              : (AI_PROVIDERS.find(p => p.id === aiSettings.provider)?.models || [])
+                            ).map((m) => (
+                              <button
+                                key={m}
+                                type="button"
+                                onClick={() => handleAiSettingsChange({ ...aiSettings, model: m })}
+                                className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded border transition-all ${
+                                  aiSettings.model === m
+                                    ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 border-indigo-400 dark:border-indigo-700'
+                                    : 'bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                                }`}
+                              >
+                                {m}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
                         <input
                           type="text"
                           value={aiSettings.model || ''}
                           onChange={(e) => handleAiSettingsChange({ ...aiSettings, model: e.target.value })}
-                          placeholder="模型名稱"
+                          placeholder="模型名稱 (亦可手動填寫自訂模型)"
                           className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
                         />
                       </div>

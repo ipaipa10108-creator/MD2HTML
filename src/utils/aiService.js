@@ -24,8 +24,14 @@ export const AI_PROVIDERS = [
     id: 'gemini',
     name: 'Gemini (Google)',
     defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-    defaultModel: 'gemini-2.0-flash',
-    models: ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+    defaultModel: 'gemini-3.5-flash-lite',
+    models: [
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+      'gemma-4-26b',
+      'gemini-2.5-flash',
+      'gemma-2-27b-it'
+    ],
     placeholderKey: 'AIzaSy...',
     docsUrl: 'https://aistudio.google.com/app/apikey'
   },
@@ -54,6 +60,233 @@ export const AI_PROVIDERS = [
     docsUrl: ''
   }
 ];
+
+// OpenRouter Free Models (ending in :free)
+export const OPENROUTER_FREE_MODELS = [
+  'google/gemini-2.0-flash-exp:free',
+  'google/gemini-2.0-pro-exp-02-05:free',
+  'google/gemini-2.0-flash-thinking-exp:free',
+  'deepseek/deepseek-r1:free',
+  'deepseek/deepseek-chat:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'meta-llama/llama-3.2-3b-instruct:free',
+  'meta-llama/llama-3.1-8b-instruct:free',
+  'qwen/qwen-2.5-coder-32b-instruct:free',
+  'qwen/qwen-2.5-72b-instruct:free',
+  'mistralai/mistral-small-24b-instruct-2501:free',
+  'cognitivecomputations/dolphin3.0-r1-mistral-24b:free'
+];
+
+// Gemini Flash-Lite and Gemma Models baseline with RPD (Requests Per Day), sorted descending
+export const GEMINI_LITE_GEMMA_MODELS = [
+  { id: 'gemma-4-26b', name: 'Gemma 4 26B', rpd: 14400, rpm: 30, family: 'gemma' },
+  { id: 'gemma-4-31b', name: 'Gemma 4 31B', rpd: 14400, rpm: 30, family: 'gemma' },
+  { id: 'gemma-2-27b-it', name: 'Gemma 2 27B IT', rpd: 14400, rpm: 30, family: 'gemma' },
+  { id: 'gemma-2-9b-it', name: 'Gemma 2 9B IT', rpd: 14400, rpm: 30, family: 'gemma' },
+  { id: 'gemma-2-2b-it', name: 'Gemma 2 2B IT', rpd: 14400, rpm: 30, family: 'gemma' },
+  { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite', rpd: 500, rpm: 15, family: 'flash-lite' },
+  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite', rpd: 500, rpm: 15, family: 'flash-lite' },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', rpd: 20, rpm: 10, family: 'flash-lite' },
+  { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash-Lite', rpd: 0, rpm: 0, family: 'flash-lite' }
+].sort((a, b) => b.rpd - a.rpd);
+
+// Storage keys for live models cache
+const STORAGE_KEY_GEMINI_LIVE = 'md2html-gemini-live-models';
+const STORAGE_KEY_OPENROUTER_LIVE_FREE = 'md2html-openrouter-live-free';
+
+// Calculate RPD and RPM based on model name according to Google's official free-tier rate limits
+export const getGeminiModelRateLimit = (modelId) => {
+  const id = modelId.toLowerCase();
+
+  // 1. Live API models (Unlimited)
+  if (id.includes('live') || id.includes('native-audio') || id.includes('native_audio')) {
+    return { rpd: 999999, rpm: 999999, isUnlimited: true, family: 'live' };
+  }
+
+  // 2. Gemma series (Gemma 4 26B, Gemma 4 31B, Gemma 2, etc.) -> 14,400 RPD, 30 RPM
+  if (id.includes('gemma')) {
+    return { rpd: 14400, rpm: 30, family: 'gemma' };
+  }
+
+  // 3. Antigravity Agent -> 100 RPD, 60 RPM
+  if (id.includes('antigravity')) {
+    return { rpd: 100, rpm: 60, family: 'agents' };
+  }
+
+  // 4. TTS models (2.5 / 3.1 Flash TTS) -> 10 RPD, 3 RPM
+  if (id.includes('tts')) {
+    return { rpd: 10, rpm: 3, family: 'tts' };
+  }
+
+  // 5. Transcribe models -> 25 RPD, 3 RPM
+  if (id.includes('transcribe')) {
+    return { rpd: 25, rpm: 3, family: 'audio' };
+  }
+
+  // 6. Embedding models (Embedding 1, Embedding 2) -> 1,000 RPD, 100 RPM
+  if (id.includes('embedding')) {
+    return { rpd: 1000, rpm: 100, family: 'embedding' };
+  }
+
+  // 7. Robotics ER 2 -> 20 RPD, 5 RPM
+  if (id.includes('robotics')) {
+    return { rpd: 20, rpm: 5, family: 'other' };
+  }
+
+  // 8. Flash-Lite series:
+  if (id.includes('flash-lite') || id.includes('flash_lite') || id.includes('flashlite')) {
+    // 3.1, 3.5 (and later 3.x) Flash Lite -> 500 RPD, 15 RPM
+    if (/3\.[1-9]|3\.\d{2}/.test(id)) {
+      return { rpd: 500, rpm: 15, family: 'flash-lite' };
+    }
+    // 2.5 Flash Lite -> 20 RPD, 10 RPM
+    if (id.includes('2.5')) {
+      return { rpd: 20, rpm: 10, family: 'flash-lite' };
+    }
+    // 2.0 / 2 Flash Lite -> 0 RPD, 0 RPM
+    if (id.includes('2.0') || (/2[-_]?flash/.test(id) && !id.includes('2.5'))) {
+      return { rpd: 0, rpm: 0, family: 'flash-lite' };
+    }
+    // Default fallback for flash-lite
+    return { rpd: 500, rpm: 15, family: 'flash-lite' };
+  }
+
+  // 9. Standard Flash series (Text-out models):
+  if (id.includes('flash')) {
+    // 2.0 / 2 Flash -> 0 RPD, 0 RPM
+    if (id.includes('2.0') || (/2[-_]?flash/.test(id) && !id.includes('2.5'))) {
+      return { rpd: 0, rpm: 0, family: 'flash' };
+    }
+    // 2.5, 3, 3.5, 3.6, 3.7, 3.8 Flash -> 20 RPD, 5 RPM
+    if (/2\.5|3(\.[0-9])?/.test(id)) {
+      return { rpd: 20, rpm: 5, family: 'flash' };
+    }
+    // Default fallback for Flash
+    return { rpd: 20, rpm: 5, family: 'flash' };
+  }
+
+  // 10. Pro models (2.5 Pro, 3.1 Pro, 2.0 Pro) -> 0 RPD, 0 RPM
+  if (id.includes('pro')) {
+    return { rpd: 0, rpm: 0, family: 'pro' };
+  }
+
+  // 11. Multi-modal / Preview models with 0 Free tier
+  if (
+    id.includes('banana') ||
+    id.includes('omni') ||
+    id.includes('veo') ||
+    id.includes('lyria') ||
+    id.includes('deep-research') ||
+    id.includes('computer-use')
+  ) {
+    return { rpd: 0, rpm: 0, family: 'other' };
+  }
+
+  return { rpd: 20, rpm: 5, family: 'other' };
+};
+
+// Fetch real-time model list from Google Gemini API
+export const fetchGeminiLiveModels = async (apiKey, baseUrl) => {
+  if (!apiKey || !apiKey.trim()) {
+    throw new Error('請先填入 Gemini API Key 才能即時獲取您帳號可用的模型清單。');
+  }
+
+  const rootUrl = (baseUrl || 'https://generativelanguage.googleapis.com/v1beta').trim().replace(/\/+$/, '');
+  const url = `${rootUrl}/models?key=${apiKey.trim()}`;
+
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    const errText = await resp.text();
+    let msg = `Google API 連線失敗 (${resp.status})`;
+    try {
+      const j = JSON.parse(errText);
+      msg = j.error?.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+
+  const data = await resp.json();
+  const rawList = data.models || [];
+
+  // Filter only models that support generateContent
+  const validModels = rawList
+    .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+    .map(m => {
+      const cleanId = m.name.replace(/^models\//, '');
+      const rate = getGeminiModelRateLimit(cleanId);
+      const isLiteOrGemma = rate.family === 'flash-lite' || rate.family === 'gemma';
+      return {
+        id: cleanId,
+        name: m.displayName || cleanId,
+        description: m.description || '',
+        rpd: rate.rpd,
+        rpm: rate.rpm,
+        family: rate.family,
+        isLiteOrGemma,
+        inputTokenLimit: m.inputTokenLimit,
+        outputTokenLimit: m.outputTokenLimit
+      };
+    })
+    .sort((a, b) => {
+      // Sort by RPD descending (14,400 RPD before 1,500 RPD)
+      if (b.rpd !== a.rpd) return b.rpd - a.rpd;
+      return a.id.localeCompare(b.id);
+    });
+
+  try {
+    localStorage.setItem(STORAGE_KEY_GEMINI_LIVE, JSON.stringify(validModels));
+  } catch {}
+
+  return validModels;
+};
+
+// Get cached live Gemini models
+export const getCachedGeminiLiveModels = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_GEMINI_LIVE);
+    if (raw) {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length > 0) return list;
+    }
+  } catch {}
+  return null;
+};
+
+// Fetch real-time free models from OpenRouter API
+export const fetchOpenRouterLiveFreeModels = async () => {
+  const resp = await fetch('https://openrouter.ai/api/v1/models');
+  if (!resp.ok) {
+    throw new Error(`OpenRouter API 回應錯誤 (${resp.status})`);
+  }
+  const data = await resp.json();
+  const models = data.data || [];
+
+  const freeModels = models
+    .filter(m => m.id.endsWith(':free') || (m.pricing && m.pricing.prompt === '0' && m.pricing.completion === '0'))
+    .map(m => ({
+      id: m.id,
+      name: m.name || m.id,
+      description: m.description || '',
+      contextLength: m.context_length || 0
+    }));
+
+  try {
+    localStorage.setItem(STORAGE_KEY_OPENROUTER_LIVE_FREE, JSON.stringify(freeModels));
+  } catch {}
+
+  return freeModels;
+};
+
+export const getCachedOpenRouterLiveFreeModels = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_OPENROUTER_LIVE_FREE);
+    if (raw) {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length > 0) return list;
+    }
+  } catch {}
+  return null;
+};
 
 // Default Universal Prompt
 export const DEFAULT_UNIVERSAL_PROMPT = `你是一位頂尖的 Markdown 排版與內容架構美化專家。請將使用者提供的 Markdown 內容進行深度重新設計與排版優化。
@@ -147,7 +380,9 @@ export const getAiConfig = () => {
         apiKey: parsed.apiKey || '',
         model: parsed.model || 'gpt-4o',
         baseUrl: parsed.baseUrl || 'https://api.openai.com/v1',
-        customHeaders: parsed.customHeaders || ''
+        customHeaders: parsed.customHeaders || '',
+        openRouterOnlyFree: Boolean(parsed.openRouterOnlyFree),
+        geminiOnlyLiteGemma: Boolean(parsed.geminiOnlyLiteGemma)
       };
     }
   } catch (e) {
@@ -159,7 +394,9 @@ export const getAiConfig = () => {
     apiKey: '',
     model: 'gpt-4o',
     baseUrl: 'https://api.openai.com/v1',
-    customHeaders: ''
+    customHeaders: '',
+    openRouterOnlyFree: false,
+    geminiOnlyLiteGemma: false
   };
 };
 
@@ -314,7 +551,8 @@ export const callAiBeautify = async ({ prompt, markdown, config = null, signal =
     }
 
     case 'gemini': {
-      const modelName = (model || 'gemini-2.0-flash').trim();
+      const rawModel = (model || 'gemini-2.0-flash').trim();
+      const modelName = rawModel.replace(/^models\//, '');
       const rootUrl = cleanBaseUrl || 'https://generativelanguage.googleapis.com/v1beta';
       const url = `${rootUrl}/models/${modelName}:generateContent?key=${apiKey.trim()}`;
 

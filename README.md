@@ -36,7 +36,9 @@
        - **雙欄模式預設開啟「同步捲動」**：進入雙欄對照時自動鎖定左右兩欄同步聯動。
      - **🤖 AI 模型 API 設定**：
        - 支援主流大模型廠商：**OpenAI (ChatGPT)**、**Claude (Anthropic)**、**Gemini (Google)**、**OpenRouter** 與 **自訂相容 API（OpenAI 格式，如 DeepSeek、Ollama 等）**。
-       - 自訂 Base URL、模型名稱與 API Key，具備一鍵「測試連線」驗證狀態，所有金鑰 100% 儲存於本地瀏覽器 localStorage，高隱私前端直連。
+       - **OpenRouter 免費模型即時篩選**：支援「僅列出 open router free model」核取方塊；一鍵點選「即時抓取免費模型」透過 OpenRouter API 動態獲取最新免費模型清單；隨附「開啟 Open Router Model ↗」官網模型庫捷徑。
+       - **Gemini 即時動態同步 ＆ 官方最新 RPD 降序排列**：支援「僅列出 flash-lite 和 Gemma 模型」核取篩選；點擊「即時抓取最新模型」或測試連線成功時，前端直連 Google API 即時同步最新可用模型；清單嚴格依 Google 官方最新公佈之 Free Tier 配額標準（RPD - 每日請求上限）由高至低排列（**Gemma 系列 14,400 RPD** 居首，**3.1/3.5 Flash-Lite 系列 500 RPD** 次之，**2.5 Flash-Lite / Flash 系列 20 RPD**，無免費額度模型標記 0 RPD），每個模型附帶專屬 RPD 徽章，並附「查看配額 ↗」直連 Google AI Studio 官方說明。
+       - 自訂 Base URL、模型名稱與 API Key，具備一鍵「⚡ 測試連線」驗證狀態，所有金鑰與設定 100% 儲存於本地瀏覽器 `localStorage`，高隱私前端直連。
      - **新手使用教學**：
        - 專為初次接觸使用者提供系統化圖文指南，快速掌握三向即時編輯、雙欄同步、原生智慧修復、AI 智能排版美化、語音播放與 PWA 捷徑。
 
@@ -204,22 +206,31 @@ MD2HTML 支援兩種完全免費且免綁信用卡的線上短網址發布服務
 
 ### 🤖 AI 模型 API 設定指南（支援各大主流模型廠商與自訂端點）
 
-MD2HTML 的「AI 美化」功能採純前端直連各大模型廠商官方 API，所有金鑰僅保存於您個人瀏覽器的 `localStorage`，絕無任何中間伺服器轉發：
+MD2HTML 的「AI 美化」功能採純前端直連各大模型廠商官方 API，所有金鑰與設定僅保存於您個人瀏覽器的 `localStorage`，絕無任何中間伺服器轉發：
 
-| 模型提供商 | 預設模型 | 取得 API Key 方式 | 特點說明 |
+| 模型提供商 | 預設模型 | 取得 API Key 方式 | 特點與即時動態功能說明 |
 | :--- | :--- | :--- | :--- |
 | **OpenAI** | `gpt-4o` | [OpenAI Platform](https://platform.openai.com/api-keys) | 排版美學頂尖、語義理解強大 |
 | **Claude** | `claude-3-5-sonnet-20241022` | [Anthropic Console](https://console.anthropic.com/settings/keys) | 長文結構整理與技術圖表編排最佳 |
-| **Gemini** | `gemini-2.0-flash` | [Google AI Studio](https://aistudio.google.com/app/apikey) | 免費額度慷慨、反應極速、多模態相容 |
-| **OpenRouter** | `google/gemini-2.0-flash-exp:free` | [OpenRouter Keys](https://openrouter.ai/keys) | 聚合數百種模型、含免費與低成本模型 |
+| **Gemini** | `gemini-3.5-flash-lite` | [Google AI Studio](https://aistudio.google.com/app/apikey) | **支援即時動態抓取官方模型**；支援「僅列出 flash-lite 和 Gemma 模型」篩選；嚴格依 Google 官方最新公佈之 Free Tier 配額（RPD）由高至低排列：**Gemma 系列高達 14,400 RPD** 優先居首，**3.1/3.5 Flash-Lite 系列 500 RPD** 次之，**2.5 Flash-Lite / Flash 系列 20 RPD**，無免費配額模型標記為 0 RPD；附帶專屬 RPD 標籤與 [官方配額說明連結](https://aistudio.google.com/app/plan_information) |
+| **OpenRouter** | `google/gemini-2.0-flash-exp:free` | [OpenRouter Keys](https://openrouter.ai/keys) | 聚合數百種模型；支援「僅列出 open router free model」專屬篩選；**支援一鍵即時動態抓取全站最新免費模型清單**（含 FREE 標籤 pills）；隨附 [OpenRouter 官方模型庫連結](https://openrouter.ai/models) |
 | **自訂相容 API** | `deepseek-chat` / 自訂 | 支援 DeepSeek, Ollama, Groq 等 | 支援任何遵循 OpenAI 規格之端點與本機模型 |
 
 #### 🛠️ 設定步驟：
 1. 點擊頂部或側欄的「**⚙️ 偏好設定**」圖標。
 2. 切換至「**🤖 AI 模型 API 設定**」標籤頁。
-3. 點選您欲使用的模型提供商（例如：Gemini 或 OpenAI）。
-4. 貼上對應的 **API Key**，並可依個人喜好選擇模型名稱（支援自由輸入任何客製模型代碼）或調整 Base URL 端點。
-5. 點選「**⚡ 測試連線**」，出現綠色勾勾 `✅ 連線成功` 即可開始在 Markdown 編輯區使用「AI 美化」！
+3. 點選您欲使用的模型提供商（例如：Gemini 或 OpenRouter）。
+4. 貼上對應的 **API Key**（所有金鑰 100% 儲存於本機瀏覽器）。
+5. **針對提供商的高級動態選取與篩選**：
+   - **OpenRouter**：
+     - 可勾選「**🆓 僅列出 open router free model**」，系統將自動過濾出全站所有免費模型。
+     - 點擊「**🔄 即時抓取免費模型**」按鈕，立即發送 API 請求同步最新免費模型庫並帶出快速選取藥丸標籤（Pills）。
+     - 亦可點選「**開啟 Open Router Model ↗**」瀏覽官網模型規格。
+   - **Gemini (Google)**：
+     - 可勾選「**⚡ 僅列出 flash-lite 和 Gemma 模型**」，鎖定每日高額度免費用量模型。
+     - 點擊「**🔄 即時抓取最新模型**」（或在點選測試連線成功時自動觸發），即時向 Google API 獲取您帳號可用的最新模型。
+     - 模型清單嚴格依 **RPD 由高至低排列**（例如：`gemma-4-26b` / `gemma-2-27b-it` 達 **14,400 RPD** 居頂，`gemini-3.5-flash-lite` 達 **500 RPD**，`gemini-2.5-flash-lite` 為 **20 RPD**，無免費配額的舊款 `gemini-2.0-flash-lite` 則標註 **0 RPD**），標籤清晰展示 RPD 額度徽章，並提供「**查看配額 ↗**」直達官方說明。
+6. 點選「**⚡ 測試連線**」，出現綠色勾勾 `✅ 連線成功` 即可開始在 Markdown 編輯區使用「AI 美化」！
 
 ---
 
@@ -300,7 +311,9 @@ Welcome to the **Universal Markdown Editor Converter**! A visually stunning, hig
        - **Dual-Pane Sync Scroll by Default**: Persistently remembers dual-pane synchronized scrolling preference.
      - **AI Model API Settings Tab**:
        - Supports major LLM providers: **OpenAI**, **Claude (Anthropic)**, **Gemini (Google)**, **OpenRouter**, and **Custom OpenAI-compatible endpoints** (e.g. DeepSeek, Ollama, Groq).
-       - Easily test connections with one click. API keys are 100% saved in the client browser (`localStorage`) for zero-leak privacy.
+       - **OpenRouter Live Free Models Filter**: Toggle "Only list open router free models"; fetch real-time free models dynamically from OpenRouter API; quick link to `openrouter.ai/models`.
+       - **Gemini Live Dynamic Sync & Official RPD Descending Order**: Toggle "Only list flash-lite and Gemma models"; dynamically sync available models directly from Google API; models are sorted strictly in descending order of Google's official free quota (**Gemma series at 14,400 RPD** prioritized at top, followed by **3.1/3.5 Flash-Lite at 500 RPD**, **2.5 Flash-Lite / Flash at 20 RPD**, and non-free models marked with 0 RPD); includes real-time RPD badges and link to Google AI Studio quota guidelines.
+       - Easily test connections with one click. API keys and configurations are 100% saved in the client browser (`localStorage`) for zero-leak privacy.
      - **Tutorial Guide Tab**:
        - A step-by-step interactive manual for newcomers covering 3-way synchronization, dual split-view, native smart beautifier, AI formatting redesign, voice reader, and PWA integration.
 
@@ -468,22 +481,31 @@ MD2HTML supports two free publishing channels. You may configure either one or b
 
 ### 🤖 AI Model API Setup Guide (OpenAI, Claude, Gemini, OpenRouter & Custom)
 
-MD2HTML connects directly from your browser to official model APIs. Keys are stored strictly inside your browser's `localStorage` with zero backend intermediary:
+MD2HTML connects directly from your browser to official model APIs. Keys and preferences are stored strictly inside your browser's `localStorage` with zero backend intermediary:
 
-| Provider | Default Model | How to get API Key | Highlights |
+| Provider | Default Model | How to get API Key | Highlights & Live Features |
 | :--- | :--- | :--- | :--- |
 | **OpenAI** | `gpt-4o` | [OpenAI Platform](https://platform.openai.com/api-keys) | Industry standard, exceptional structure & aesthetics |
 | **Claude** | `claude-3-5-sonnet-20241022` | [Anthropic Console](https://console.anthropic.com/settings/keys) | Unmatched code, diagram & document layout intelligence |
-| **Gemini** | `gemini-2.0-flash` | [Google AI Studio](https://aistudio.google.com/app/apikey) | Generous free tier, lightning-fast response times |
-| **OpenRouter** | `google/gemini-2.0-flash-exp:free` | [OpenRouter Keys](https://openrouter.ai/keys) | Hundreds of models, including free and budget-friendly options |
+| **Gemini** | `gemini-3.5-flash-lite` | [Google AI Studio](https://aistudio.google.com/app/apikey) | **Live model synchronization via Google API**; filter for "Only list flash-lite and Gemma models"; sorted strictly in descending order of Google's official free quota (RPD): **Gemma series at 14,400 RPD** prioritized at top, followed by **3.1/3.5 Flash-Lite at 500 RPD**, **2.5 Flash-Lite / Flash at 20 RPD**, and non-free models marked with 0 RPD; includes live RPD badges and [Official Quota Guide](https://aistudio.google.com/app/plan_information) |
+| **OpenRouter** | `google/gemini-2.0-flash-exp:free` | [OpenRouter Keys](https://openrouter.ai/keys) | Hundreds of models; filter for "Only list open router free models"; **one-click real-time fetch of all active free models** (with quick-select FREE pills); direct link to [OpenRouter Models](https://openrouter.ai/models) |
 | **Custom API** | `deepseek-chat` / Custom | Supports DeepSeek, Ollama, Groq, etc. | Any endpoint following the OpenAI API standard |
 
 #### 🛠️ Setup Steps:
 1. Click the gear icon (**⚙️ Preferences**) in the toolbar.
 2. Select the **🤖 AI Model API Settings** tab.
-3. Choose your preferred AI provider (e.g. Gemini or OpenAI).
-4. Paste your **API Key**, optionally customize the model name or Base URL.
-5. Click **⚡ Test Connection** to verify. Once you see `✅ Connection successful`, you're ready to use AI Beautify!
+3. Choose your preferred AI provider (e.g. Gemini or OpenRouter).
+4. Paste your **API Key** (all keys stored 100% locally in your browser).
+5. **Provider-Specific Dynamic Controls & Filters**:
+   - **OpenRouter**:
+     - Check **"🆓 Only list open router free models"** to automatically filter the model list down to 100% free options.
+     - Click **"🔄 Fetch Free Models"** to query OpenRouter's live API and populate one-click pill selectors.
+     - Click **"Open Router Model ↗"** to review model cards on openrouter.ai.
+   - **Gemini (Google)**:
+     - Check **"⚡ Only list flash-lite and Gemma models"** to focus on ultra-high daily free quota tiers.
+     - Click **"🔄 Fetch Live Models"** (or trigger automatically on successful connection test) to pull all available models from Google API.
+     - Models are ranked **strictly by RPD descending** (e.g. `gemma-4-26b` / `gemma-2-27b-it` with **14,400 RPD** rank at top, `gemini-3.5-flash-lite` with **500 RPD**, `gemini-2.5-flash-lite` with **20 RPD**, and non-free tier models like `gemini-2.0-flash-lite` labeled as **0 RPD**). Badges display exact daily limits, alongside a **"View Quotas ↗"** link to Google AI Studio.
+6. Click **⚡ Test Connection**. Once you see `✅ Connection successful`, you are ready to beautify with AI!
 
 ---
 
