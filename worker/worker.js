@@ -193,12 +193,13 @@ export default {
           });
         }
 
-        // Return HTML
+        // Return HTML with CORS headers enabled for easy re-import
         return new Response(html, {
           headers: {
             'Content-Type': 'text/html; charset=utf-8',
             'X-Robots-Tag': 'noindex, nofollow',
             'Cache-Control': 'public, max-age=1800',
+            ...getCorsHeaders(),
           },
         });
       }

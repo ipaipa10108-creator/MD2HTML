@@ -69,6 +69,41 @@ export async function encryptPayload(payloadObj, password) {
 }
 
 /**
+ * Decrypt payload with password using AES-GCM (256-bit) and PBKDF2
+ */
+export async function decryptPayload(payload, password) {
+  const enc = new TextEncoder();
+  const salt = base64ToBuffer(payload.salt);
+  const iv = base64ToBuffer(payload.iv);
+  const ciphertext = base64ToBuffer(payload.ciphertext);
+
+  const keyMaterial = await window.crypto.subtle.importKey(
+    'raw',
+    enc.encode(password),
+    'PBKDF2',
+    false,
+    ['deriveKey']
+  );
+
+  const key = await window.crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt']
+  );
+
+  const decryptedBuffer = await window.crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    ciphertext
+  );
+
+  const decryptedText = new TextDecoder().decode(decryptedBuffer);
+  return JSON.parse(decryptedText);
+}
+
+/**
  * Escape text for safe HTML injection
  */
 function escapeHtml(text) {
@@ -92,7 +127,8 @@ export async function buildPublishableHTML({
   exportedHeadings = [],
   isEncrypted = false,
   password = '',
-  hasMermaid = false
+  hasMermaid = false,
+  markdown = ''
 }) {
   const safeTitle = escapeHtml(title);
   const cleanDesc = (description || title).replace(/\r?\n+/g, ' ').trim();
@@ -124,7 +160,9 @@ export async function buildPublishableHTML({
       {
         articleContentHtml,
         exportedHeadings,
-        tocHtml
+        tocHtml,
+        markdown,
+        title: safeTitle
       },
       password
     );
@@ -627,6 +665,18 @@ export async function buildPublishableHTML({
 
   <script id="encrypted-payload" type="application/json">
     ${encryptedPayloadJson}
+  </script>
+  ` : ''}
+
+  ${!isEncrypted && markdown ? `
+  <script id="md2html-metadata" type="application/json">
+${JSON.stringify({
+  generator: 'MD2HTML',
+  version: '1.0',
+  exportedAt: new Date().toISOString(),
+  title: safeTitle,
+  markdown
+})}
   </script>
   ` : ''}
 

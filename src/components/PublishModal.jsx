@@ -309,7 +309,8 @@ function PublishModalContent({
         exportedHeadings,
         isEncrypted,
         password: password.trim(),
-        hasMermaid
+        hasMermaid,
+        markdown
       });
 
       let result;

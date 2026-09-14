@@ -11,6 +11,8 @@ import PublishModal from './components/PublishModal';
 import PublishHistoryModal from './components/PublishHistoryModal';
 import AiBeautifyModal from './components/AiBeautifyModal';
 import VoicePlayerBar from './components/VoicePlayerBar';
+import ImportModal from './components/ImportModal';
+import { parsePdfToMarkdown, parseHtmlToMarkdown } from './utils/importer';
 import {
   AI_PROVIDERS,
   OPENROUTER_FREE_MODELS,
@@ -1639,6 +1641,7 @@ export default function App() {
   const [showFilenameModal, setShowFilenameModal] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showPublishHistoryModal, setShowPublishHistoryModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [pendingHtmlAction, setPendingHtmlAction] = useState(null);
   const [tempExportFilename, setTempExportFilename] = useState('');
   const [exportHTMLBlob, setExportHTMLBlob] = useState(null);
@@ -1806,6 +1809,33 @@ export default function App() {
   };
   const addToFileHistoryRef = useRef(addToFileHistory);
   useEffect(() => { addToFileHistoryRef.current = addToFileHistory; });
+
+  const handleApplyImport = ({ markdown: importedMd, title, theme }) => {
+    if (!importedMd || !importedMd.trim()) return;
+
+    activePaneRef.current = 'markdown';
+    setMarkdown(importedMd);
+    const { html: parsedHTML, readingHtml: parsedReadingHtml, rawFrontMatter } = parseMarkdownToHtml(importedMd);
+    setFrontMatterRaw(rawFrontMatter);
+    setHtml(parsedHTML);
+    setReadingHtml(parsedReadingHtml);
+    pushToHistory(importedMd);
+
+    const docTitle = title || '匯入文件';
+    addToFileHistory(docTitle, importedMd);
+
+    if (theme === 'dark' || theme === 'light') {
+      setExportTheme(theme);
+    }
+
+    if (layout === 'single') {
+      setTimeout(() => {
+        setSinglePane('reading');
+      }, 100);
+    }
+
+    showToast(`🎉 成功還原「${docTitle}」！可立即在編輯器中進行調整修改。`, 'success');
+  };
 
   const handleMarkdownChangeRef = useRef(handleMarkdownChange);
   const handleHtmlChangeRef = useRef(handleHtmlChange);
@@ -1991,6 +2021,8 @@ export default function App() {
       let mdFileName = '';
       let htmlContent = '';
       let htmlFileName = '';
+      let pdfBuffer = null;
+      let pdfFileName = '';
 
       const traverseFileTree = async (item, path = '') => {
         if (item.isFile) {
@@ -2004,6 +2036,9 @@ export default function App() {
           } else if (['.html', '.htm'].includes(ext)) {
             htmlContent = await file.text();
             htmlFileName = file.name;
+          } else if (ext === '.pdf') {
+            pdfBuffer = await file.arrayBuffer();
+            pdfFileName = file.name;
           } else if (['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(ext)) {
             const blobUrl = URL.createObjectURL(file);
             newImageMap[relativePath] = blobUrl;
@@ -2036,7 +2071,14 @@ export default function App() {
 
         setImageMap(newImageMap);
 
-        if (mdContent) {
+        if (pdfBuffer) {
+          try {
+            const res = await parsePdfToMarkdown(pdfBuffer);
+            handleApplyImport({ ...res, title: res.title || pdfFileName.replace(/\.[^/.]+$/, '') });
+          } catch (pdfErr) {
+            showToastRef.current(`❌ PDF 解析失敗: ${pdfErr.message}`, 'error');
+          }
+        } else if (mdContent) {
           handleMarkdownChangeRef.current(mdContent);
           // Derive label: YAML title or file name
           const fmResult = parseFrontMatter(mdContent);
@@ -2044,20 +2086,30 @@ export default function App() {
           addToFileHistoryRef.current(histLabel, mdContent);
           showToastRef.current(`📥 已成功讀取 Markdown 檔案: ${mdFileName}，並載入本機圖片！`, 'success');
         } else if (htmlContent) {
-          let parsedContent = htmlContent;
-          if (htmlContent.includes('<body') || htmlContent.includes('<BODY')) {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(htmlContent, 'text/html');
-            const markdownBody = doc.querySelector('.markdown-body');
-            if (markdownBody) {
-              parsedContent = markdownBody.innerHTML;
-            } else if (doc.body) {
-              parsedContent = doc.body.innerHTML;
+          try {
+            const res = await parseHtmlToMarkdown(htmlContent);
+            if (res.needsPassword) {
+              setShowImportModal(true);
+              showToastRef.current('🔒 此 HTML 檔案受到密碼保護，請在彈出視窗輸入密碼！', 'info');
+            } else {
+              handleApplyImport({ ...res, title: res.title || htmlFileName.replace(/\.[^/.]+$/, '') });
             }
+          } catch {
+            let parsedContent = htmlContent;
+            if (htmlContent.includes('<body') || htmlContent.includes('<BODY')) {
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(htmlContent, 'text/html');
+              const markdownBody = doc.querySelector('.markdown-body');
+              if (markdownBody) {
+                parsedContent = markdownBody.innerHTML;
+              } else if (doc.body) {
+                parsedContent = doc.body.innerHTML;
+              }
+            }
+            handleHtmlChangeRef.current(parsedContent);
+            addToFileHistoryRef.current(htmlFileName || '未命名 HTML', parsedContent);
+            showToastRef.current(`📥 已成功讀取 HTML 檔案: ${htmlFileName}！`, 'success');
           }
-          handleHtmlChangeRef.current(parsedContent);
-          addToFileHistoryRef.current(htmlFileName || '未命名 HTML', parsedContent);
-          showToastRef.current(`📥 已成功讀取 HTML 檔案: ${htmlFileName}，並載入本機圖片！`, 'success');
         } else if (Object.keys(newImageMap).length > 0) {
           showToastRef.current(`📥 已載入 ${Object.keys(newImageMap).length} 張本機圖片！`, 'success');
         }
@@ -2595,6 +2647,24 @@ export default function App() {
         format: 'a4'
       });
 
+      const pdfTitleMatch = markdown.match(/^#\s+(.+)$/m);
+      const pdfDocTitle = pdfTitleMatch ? pdfTitleMatch[1].trim() : 'Markdown 匯出文件';
+      const pdfMetaPayload = JSON.stringify({
+        generator: 'MD2HTML',
+        version: '1.0',
+        exportedAt: new Date().toISOString(),
+        title: pdfDocTitle,
+        theme: exportTheme,
+        markdown
+      });
+      pdf.setProperties({
+        title: pdfDocTitle,
+        subject: pdfMetaPayload,
+        keywords: pdfMetaPayload,
+        author: 'MD2HTML',
+        creator: 'MD2HTML'
+      });
+
       for (let i = 0; i < totalPages; i++) {
         if (i > 0) pdf.addPage();
         
@@ -2663,6 +2733,24 @@ export default function App() {
         orientation: 'portrait',
         unit: 'pt',
         format: 'a4'
+      });
+
+      const textPdfTitleMatch = markdown.match(/^#\s+(.+)$/m);
+      const textPdfDocTitle = textPdfTitleMatch ? textPdfTitleMatch[1].trim() : 'Markdown 匯出文字文件';
+      const textPdfMetaPayload = JSON.stringify({
+        generator: 'MD2HTML',
+        version: '1.0',
+        exportedAt: new Date().toISOString(),
+        title: textPdfDocTitle,
+        theme: exportTheme,
+        markdown
+      });
+      pdf.setProperties({
+        title: textPdfDocTitle,
+        subject: textPdfMetaPayload,
+        keywords: textPdfMetaPayload,
+        author: 'MD2HTML',
+        creator: 'MD2HTML'
       });
       
       // 3. Register and set font
@@ -4015,6 +4103,16 @@ export default function App() {
     observer.observe(document.body, { attributes: true });
   </script>
   ` : ''}
+  <script id="md2html-metadata" type="application/json">
+${JSON.stringify({
+  generator: 'MD2HTML',
+  version: '1.0',
+  exportedAt: new Date().toISOString(),
+  title,
+  theme: exportTheme,
+  markdown
+})}
+  </script>
 </body>
 </html>`;
       
@@ -5037,6 +5135,18 @@ export default function App() {
           </label>
         )}
 
+        {/* Import Button */}
+        <button
+          onClick={() => setShowImportModal(true)}
+          className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-950 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded-lg transition-all"
+          title="匯入已製作好的網頁網址或 PDF"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+          </svg>
+          <span>匯入</span>
+        </button>
+
         {/* Paste Buttons */}
         <button
           onClick={() => handlePaste(paneType)}
@@ -5169,6 +5279,21 @@ export default function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
               <span className="hidden sm:inline">清空</span>
+            </button>
+
+            {/* Import Trigger */}
+            <button 
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-all border border-indigo-200/50 dark:border-indigo-900/50 shadow-xs active:scale-95"
+              title="匯入已製作好的網頁網址或 PDF"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+              <span className="font-bold">匯入</span>
+              <span className="hidden md:inline text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                網址/PDF
+              </span>
             </button>
 
             {/* Export Trigger */}
@@ -6794,6 +6919,14 @@ export default function App() {
         showToast={showToast}
       />
 
+      {/* --- IMPORT MODAL (URL & PDF) --- */}
+      <ImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onApplyImport={handleApplyImport}
+        showToast={showToast}
+      />
+
       {/* --- HIDDEN CANVAS OFFSCREEN RENDERING CONTAINER --- */}
       <div className="absolute left-[-9999px] top-[-9999px] pointer-events-none" aria-hidden="true">
         <div 
@@ -6824,7 +6957,7 @@ export default function App() {
                 放開滑鼠以讀取檔案
               </h3>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                支援自動讀取並同步 <strong className="text-indigo-500 dark:text-indigo-400 font-bold">.md</strong>、<strong className="text-indigo-500 dark:text-indigo-400 font-bold">.txt</strong> 或 <strong className="text-indigo-500 dark:text-indigo-400 font-bold">.html</strong> 格式的檔案
+                支援自動讀取並還原 <strong className="text-indigo-500 dark:text-indigo-400 font-bold">.pdf</strong>、<strong className="text-indigo-500 dark:text-indigo-400 font-bold">.html</strong>、<strong className="text-indigo-500 dark:text-indigo-400 font-bold">.md</strong> 或 <strong className="text-indigo-500 dark:text-indigo-400 font-bold">.txt</strong> 格式檔案
               </p>
             </div>
           </div>

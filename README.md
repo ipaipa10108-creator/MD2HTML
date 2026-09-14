@@ -142,6 +142,49 @@
       - 支援從遠端伺服器或 GitHub 倉庫一鍵下架刪除文件。
       - **跨裝置無縫移轉**：提供「匯出 JSON」與「匯入 JSON（合併 / 覆蓋模式）」功能，更換手機或瀏覽器時輕鬆備份移轉所有發布紀錄與管理金鑰，不怕資料遺失。
 
+15. **📥 萬能反向匯入與狀態還原（網頁網址 ＋ 密碼保護解密 ＋ PDF 結構化提取 ＋ 雙向無損生態系）**
+    - **已發布網頁網址一鍵逆向還原**：
+      - 支援直接輸入或貼上已發布之網頁網址（如 Cloudflare Workers 或 GitHub Pages）。
+      - 自動抓取線上內容，智慧逆向解析為原始 Markdown 內容、各級標題、提示方塊（`[!NOTE]` 等）、GFM 表格與 Mermaid 圖表代碼。
+    - **零知識加密網頁解鎖 (Client-Side AES-256-GCM Decryption)**：
+      - 自動辨識密碼保護網頁，彈出密碼輸入框；密碼錯誤時提供直覺的搖晃動畫提示。
+      - 透過瀏覽器 Web Crypto API 於本地毫秒級解密，立即還原加密前的編輯狀態。
+    - **PDF 排版結構化提取引擎 (pdf.js)**：
+      - 整合 `pdf.js` 解析引擎，提取文字層並智慧分析字級大小（Font Size）與行高。
+      - 自動推導 `#` (H1)、`##` (H2)、`###` (H3) 階層標題、段落與列表清單，將靜態 PDF 還原為結構分明的可編輯 Markdown。
+    - **雙向無損中繼資料生態系 (Lossless MD2HTML Ecosystem)**：
+      - 系統匯出 HTML 與 PDF 時自動注入專屬 `md2html-metadata` 標籤。
+      - 由本系統產出之網頁或 PDF 匯入時，可達到 **100% 字元完全相符的無損還原**；外部網頁或 PDF 則經由智慧結構分析器最佳化轉譯。
+    - **全域檔案拖放 (Drag & Drop) 支援**：
+      - 支援將電腦中的 `.pdf`、`.html` 或 `.md` 檔案直接拖曳至視窗任意區域，系統自動啟動解析並預覽。
+    - **CORS 跨域友善與即時後備機制**：
+      - 針對尚未設定跨域允許的舊版伺服器，彈窗內建「直接貼上 HTML 原始碼」區塊，免架設 Proxy 即可秒級還原。
+    - **完整歷史紀錄整合 (Undo / Redo)**：
+      - 匯入成功後立即更新編輯器、文章大綱與即時預覽，並推入歷史堆疊，隨時可按 `Ctrl + Z` 復原至匯入前草稿。
+
+---
+
+### 📥 網頁網址與 PDF 匯入使用指南（支援無損還原與密碼解鎖）
+
+MD2HTML 提供全方位的「反向匯入」能力，無論是已線上發布的網頁，或是電腦中的 PDF / HTML 檔案，皆可迅速還原為編輯狀態進行二次創作：
+
+#### 🛠️ 使用步驟：
+
+1. **開啟匯入彈窗**：
+   - 點擊頂部導覽列的 **「📥 匯入 (網址/PDF)」** 按鈕，或 Markdown 編輯工具列的「匯入」圖標。
+2. **方式一：匯入已發布網頁網址**：
+   - 在「🌐 網頁網址」分頁中貼上目標網址（例如：Cloudflare Worker 網址或 GitHub Pages 網址）。
+   - 彈窗貼心提供 **「一鍵填入範例：Firebase / Worker」** 與 **「GitHub (密碼保護)」** 按鈕供快速體驗。
+   - 點擊 **「⚡ 解析內容」**。
+   - **若為密碼保護網頁**：系統將自動切換為密碼輸入視圖，輸入密碼後點擊 **「解鎖並解析」** 即可。
+   - **若遇到同源政策 (CORS) 限制**：可點擊展開「**手動貼上 HTML 原始碼**」區塊，將網頁原始碼貼入後點擊「解析貼上的原始碼」，完全不受跨域限制。
+3. **方式二：匯入本機 PDF 或 HTML 檔案**：
+   - 切換至「📑 本機檔案 / PDF」分頁，點擊選取檔案；或**直接將 `.pdf` / `.html` 檔案拖放進瀏覽器任意區域**。
+   - 系統將自動調用 `pdf.js` 解析文字層並智慧推導標題階層，或提取 HTML 中繼資料。
+4. **預覽並載入編輯器**：
+   - 解析完成後，彈窗下方會顯示標題、字數、還原模式（無損中繼資料還原 / 智慧轉譯）與 Markdown 前導預覽。
+   - 點擊 **「載入至編輯器進行修改」**，即可立即套用至 Markdown 編輯區、大綱與預覽畫面，並隨時支援 `Ctrl + Z` 復原。
+
 ---
 
 ### 🌐 線上發布與分享服務設定指南（100% 免費、完全免綁信用卡）
@@ -420,6 +463,47 @@ Welcome to the **Universal Markdown Editor Converter**! A visually stunning, hig
       - Stores published article history, provider tags, creation timestamps, and management secret tokens in `localStorage`.
       - Delete or take down published files from Cloudflare KV or GitHub Pages with a single click.
       - **JSON Export & Import (Merge / Replace)**: Easily backup and restore your publishing history and deletion keys across different mobile devices or browsers!
+
+15. **📥 Universal Reverse Import & State Restoration (Web URLs + Password Decryption + PDF Structural Extraction + Lossless Ecosystem)**
+    - **Published Webpage Reverse Restoration**:
+      - Paste any live URL (e.g. Cloudflare Workers or GitHub Pages).
+      - Automatically fetches and parses pages back to Markdown, heading trees, callouts (`[!NOTE]`), GFM tables, and Mermaid diagram code.
+    - **Zero-Knowledge Password Decryption (Client-Side AES-256-GCM)**:
+      - Automatically detects password-protected documents and prompts for a password with a shake animation for invalid attempts.
+      - Decrypts client-side using the browser's Web Crypto API in milliseconds.
+    - **PDF Structural Extraction Engine (pdf.js)**:
+      - Integrated `pdf.js` parses the text layer and analyzes font sizes and line heights to infer `#` (H1), `##` (H2), `###` (H3) headings, lists, and paragraphs.
+    - **Lossless MD2HTML Ecosystem**:
+      - Automatically injects `md2html-metadata` into exported HTML and PDF files.
+      - Files exported by MD2HTML achieve **100% exact character-for-character lossless restoration**, while external pages and PDFs are intelligently converted via the heuristic parser.
+    - **Global Drag & Drop Support**:
+      - Drag and drop `.pdf`, `.html`, or `.md` files anywhere into the application window to trigger instant parsing.
+    - **CORS-Friendly Fallback**:
+      - Built-in "Manual HTML Code Paste" section lets you bypass any strict CORS policies without needing a proxy.
+    - **Undo / Redo Integration**:
+      - Imported state updates the editor, outline, and live preview immediately, and pushes to the history stack for instant `Ctrl + Z` undo.
+
+---
+
+### 📥 Web URL & PDF Import Guide (Lossless Restoration & Password Unlock)
+
+MD2HTML provides end-to-end reverse import capabilities to bring published pages or local files back to life for editing:
+
+#### 🛠️ Steps:
+
+1. **Open Import Dialog**:
+   - Click **"📥 匯入 (網址/PDF)"** in the top navigation bar or the toolbar import icon.
+2. **Option A: Import from Live Web URL**:
+   - Paste the target URL under the "🌐 網頁網址" tab.
+   - Quick sample buttons are provided for instant testing: **"Firebase / Worker"** and **"GitHub (Password Protected)"**.
+   - Click **"⚡ 解析內容 (Parse Content)"**.
+   - **Password-Protected Pages**: Enter the password and click **"解鎖並解析 (Unlock & Parse)"**.
+   - **CORS Blocked Pages**: Expand the **"手動貼上 HTML 原始碼 (Paste HTML Manually)"** section to parse raw source code directly.
+3. **Option B: Import Local PDF or HTML Files**:
+   - Switch to the "📑 本機檔案 / PDF" tab to select a file, or **simply drag and drop `.pdf` / `.html` files directly into the window**.
+4. **Preview and Load into Editor**:
+   - Inspect the detected title, word count, restoration mode (Lossless vs Smart Conversion), and preview snippet.
+   - Click **"載入至編輯器進行修改 (Load into Editor)"** to begin editing with full Undo (`Ctrl + Z`) support.
 
 ---
 
