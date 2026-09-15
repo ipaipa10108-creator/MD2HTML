@@ -82,10 +82,7 @@ function ImportModalContent({ onClose, onApplyImport, showToast }) {
       const res = await fetchAndImportFromUrl(targetUrl);
       if (res.needsPassword) {
         setNeedsPassword(true);
-        // Fetch raw html to cache for local decryption
-        const resp = await fetch(targetUrl);
-        const html = await resp.text();
-        setCachedEncryptedHtml(html);
+        setCachedEncryptedHtml(res.rawHtml || '');
         setLoadingText('');
         setIsLoading(false);
         return;

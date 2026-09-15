@@ -1672,7 +1672,31 @@ export default function App() {
     } catch { return []; }
   });
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
+  const [historyMenuAlign, setHistoryMenuAlign] = useState('right');
   const historyMenuRef = useRef(null);
+
+  // Consolidated Import & Export Menu State
+  const [showIoMenu, setShowIoMenu] = useState(false);
+  const [ioMenuAlign, setIoMenuAlign] = useState('right');
+  const ioMenuRef = useRef(null);
+
+  const toggleHistoryMenu = () => {
+    if (!showHistoryMenu && historyMenuRef.current) {
+      const rect = historyMenuRef.current.getBoundingClientRect();
+      const menuW = Math.min(288, window.innerWidth - 24);
+      setHistoryMenuAlign(rect.right < menuW + 16 ? 'left' : 'right');
+    }
+    setShowHistoryMenu(v => !v);
+  };
+
+  const toggleIoMenu = () => {
+    if (!showIoMenu && ioMenuRef.current) {
+      const rect = ioMenuRef.current.getBoundingClientRect();
+      const menuW = Math.min(288, window.innerWidth - 24);
+      setIoMenuAlign(rect.right < menuW + 16 ? 'left' : 'right');
+    }
+    setShowIoMenu(v => !v);
+  };
 
   // --- Dark Mode State ---
   const [darkMode, setDarkMode] = useState(() => {
@@ -1778,6 +1802,9 @@ export default function App() {
       }
       if (historyMenuRef.current && !historyMenuRef.current.contains(event.target)) {
         setShowHistoryMenu(false);
+      }
+      if (ioMenuRef.current && !ioMenuRef.current.contains(event.target)) {
+        setShowIoMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -5135,17 +5162,6 @@ ${JSON.stringify({
           </label>
         )}
 
-        {/* Import Button */}
-        <button
-          onClick={() => setShowImportModal(true)}
-          className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-950 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded-lg transition-all"
-          title="匯入已製作好的網頁網址或 PDF"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-          </svg>
-          <span>匯入</span>
-        </button>
 
         {/* Paste Buttons */}
         <button
@@ -5281,64 +5297,230 @@ ${JSON.stringify({
               <span className="hidden sm:inline">清空</span>
             </button>
 
-            {/* Import Trigger */}
-            <button 
-              onClick={() => setShowImportModal(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-all border border-indigo-200/50 dark:border-indigo-900/50 shadow-xs active:scale-95"
-              title="匯入已製作好的網頁網址或 PDF"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-              </svg>
-              <span className="font-bold">匯入</span>
-              <span className="hidden md:inline text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
-                網址/PDF
-              </span>
-            </button>
-
-            {/* Export Trigger */}
-            <button 
-              onClick={() => {
-                setShowExportModal(true);
-                setTimeout(handleGenerateSlices, 105);
-              }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-750 shadow-md shadow-indigo-500/10 hover:shadow-indigo-500/20 active:scale-[0.98] transition-all"
-              title="匯出為圖片/切片"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              <span>圖片切片匯出</span>
-            </button>
-
-            {/* Dark Mode Switcher (白底/黑底模式) */}
-            <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-900 p-0.5 border border-slate-200/60 dark:border-slate-800/60 shrink-0">
-              <button 
-                onClick={() => setDarkMode(false)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${!darkMode ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-855'}`}
-                title="切換為白底模式"
+            {/* Consolidated Import & Export Action Menu */}
+            <div className="relative shrink-0" ref={ioMenuRef}>
+              <button
+                onClick={toggleIoMenu}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 via-purple-600 to-indigo-600 hover:from-indigo-600 hover:to-purple-700 shadow-md shadow-indigo-500/15 hover:shadow-indigo-500/25 active:scale-[0.98] transition-all"
+                title="匯入、匯出、圖片切片與線上發布"
               >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 12 12 16.5m0 0L16.5 12M12 16.5V3" />
                 </svg>
-                <span>白底</span>
-              </button>
-              <button 
-                onClick={() => setDarkMode(true)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${darkMode ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-855'}`}
-                title="切換為黑底模式"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                <span>匯入／匯出</span>
+                <svg className="w-2.5 h-2.5 ml-0.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
                 </svg>
-                <span>黑底</span>
               </button>
+
+              {showIoMenu && (
+                <div className={`absolute ${ioMenuAlign === 'left' ? 'left-0' : 'right-0'} mt-2 w-72 max-w-[calc(100vw-24px)] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xl z-50 p-2 flex flex-col gap-1 animate-fade-in max-h-[80vh] overflow-y-auto`}>
+                  
+                  {/* Section: 匯入 */}
+                  <div className="px-2.5 py-1 text-[10px] font-extrabold tracking-wider uppercase text-slate-400 dark:text-slate-500 flex items-center justify-between">
+                    <span>📥 匯入功能</span>
+                  </div>
+
+                  {/* 1. 網址 / PDF 匯入 */}
+                  <button
+                    onClick={() => {
+                      setShowIoMenu(false);
+                      setShowImportModal(true);
+                    }}
+                    className="w-full flex items-center gap-2.5 p-2 rounded-xl text-left hover:bg-indigo-50/70 dark:hover:bg-indigo-950/40 transition-all group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 flex items-center justify-between">
+                        <span>網址 / PDF / 檔案匯入</span>
+                        <span className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">還原</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                        貼上發布網址或拖放檔案還原編輯
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* 2. 載入本機圖片 */}
+                  <label className="w-full flex items-center gap-2.5 p-2 rounded-xl text-left hover:bg-indigo-50/70 dark:hover:bg-indigo-950/40 transition-all group cursor-pointer">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375 .375 0 1 1-.75 0 .375 .375 0 0 1 .75 0z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                        載入本機圖片資料夾
+                      </div>
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                        批次載入圖檔供文章即時引用
+                      </div>
+                    </div>
+                    <input
+                      type="file"
+                      webkitdirectory=""
+                      directory=""
+                      multiple
+                      onChange={(e) => {
+                        setShowIoMenu(false);
+                        handleLoadLocalImages(e);
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+
+                  <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-1" />
+
+                  {/* Section: 匯出 */}
+                  <div className="px-2.5 py-1 text-[10px] font-extrabold tracking-wider uppercase text-slate-400 dark:text-slate-500 flex items-center justify-between">
+                    <span>📤 匯出與分享</span>
+                  </div>
+
+                  {/* 3. 圖片切片匯出 */}
+                  <button
+                    onClick={() => {
+                      setShowIoMenu(false);
+                      setShowExportModal(true);
+                      setTimeout(handleGenerateSlices, 105);
+                    }}
+                    className="w-full flex items-center gap-2.5 p-2 rounded-xl text-left bg-gradient-to-r from-purple-50/60 to-indigo-50/60 dark:from-purple-950/30 dark:to-indigo-950/30 hover:from-purple-100/80 hover:to-indigo-100/80 dark:hover:from-purple-900/50 dark:hover:to-indigo-900/50 border border-purple-200/50 dark:border-purple-800/50 transition-all group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-500 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-purple-700 dark:text-purple-300 flex items-center justify-between">
+                        <span>圖片切片匯出</span>
+                        <span className="text-[9px] px-1.5 py-0.2 rounded font-extrabold bg-purple-500 text-white shadow-xs">熱門</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                        智慧切片長圖、多圖分頁與 ZIP 下載
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* 4. 線上發布與分享 */}
+                  <button
+                    onClick={() => {
+                      setShowIoMenu(false);
+                      setShowPublishModal(true);
+                    }}
+                    className="w-full flex items-center gap-2.5 p-2 rounded-xl text-left hover:bg-indigo-50/70 dark:hover:bg-indigo-950/40 transition-all group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                      <span className="text-sm">🌐</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 flex items-center justify-between">
+                        <span>線上發布與分享</span>
+                        <span className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-indigo-500 text-white">雲端</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                        產出永久短網址 (Worker / GitHub)
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* 5. 下載美化 HTML */}
+                  <button
+                    onClick={() => {
+                      setShowIoMenu(false);
+                      handleExportHTML('download');
+                    }}
+                    className="w-full flex items-center gap-2.5 p-2 rounded-xl text-left hover:bg-indigo-50/70 dark:hover:bg-indigo-950/40 transition-all group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                      <span className="text-sm">💾</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                        下載美化 HTML 檔案
+                      </div>
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                        離線單檔、自帶目錄跳轉與深淺切換
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* 6. 下載文字 PDF */}
+                  <button
+                    onClick={() => {
+                      setShowIoMenu(false);
+                      handleExportTextPDF('download');
+                    }}
+                    className="w-full flex items-center gap-2.5 p-2 rounded-xl text-left hover:bg-indigo-50/70 dark:hover:bg-indigo-950/40 transition-all group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                      <span className="text-sm">📝</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                        下載文字版 PDF
+                      </div>
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                        向量文字排版，支援反白複製與搜尋
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* 7. 下載圖片 PDF */}
+                  <button
+                    onClick={() => {
+                      setShowIoMenu(false);
+                      handleExportPDF('download');
+                    }}
+                    className="w-full flex items-center gap-2.5 p-2 rounded-xl text-left hover:bg-indigo-50/70 dark:hover:bg-indigo-950/40 transition-all group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                      <span className="text-sm">🖼️</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                        下載圖片版 PDF
+                      </div>
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                        完整保留視覺風格與圖表渲染
+                      </div>
+                    </div>
+                  </button>
+
+                </div>
+              )}
             </div>
+
+            {/* Dark Mode Switcher (單鍵白底/黑底切換) */}
+            <button 
+              onClick={() => setDarkMode(prev => !prev)}
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 border border-slate-200/60 dark:border-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-900 transition-all shrink-0 active:scale-95"
+              title={darkMode ? '切換為白底淺色模式' : '切換為黑底深色模式'}
+            >
+              {darkMode ? (
+                <>
+                  <svg className="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <span className="hidden sm:inline">白底</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                  <span className="hidden sm:inline">黑底</span>
+                </>
+              )}
+            </button>
 
             {/* File History Dropdown */}
             <div className="relative shrink-0" ref={historyMenuRef}>
               <button
-                onClick={() => setShowHistoryMenu(v => !v)}
+                onClick={toggleHistoryMenu}
                 className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-semibold border transition-all ${
                   fileHistory.length === 0
                     ? 'text-slate-400 dark:text-slate-600 border-slate-200/40 dark:border-slate-800/40 cursor-default opacity-50'
@@ -5362,7 +5544,7 @@ ${JSON.stringify({
               </button>
 
               {showHistoryMenu && fileHistory.length > 0 && (
-                <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xl z-50 p-1.5 flex flex-col gap-0.5 animate-fade-in max-h-[70vh] overflow-y-auto">
+                <div className={`absolute ${historyMenuAlign === 'left' ? 'left-0' : 'right-0'} mt-2 w-72 max-w-[calc(100vw-24px)] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xl z-50 p-1.5 flex flex-col gap-0.5 animate-fade-in max-h-[70vh] overflow-y-auto`}>
                   <div className="flex items-center justify-between px-3 py-1.5 mb-0.5">
                     <span className="text-[10px] font-extrabold tracking-widest uppercase text-slate-400 dark:text-slate-500">最近閱讀紀錄</span>
                     <button

@@ -350,6 +350,7 @@ export async function parseHtmlToMarkdown(htmlString, password = null) {
     if (!password) {
       return {
         needsPassword: true,
+        rawHtml: htmlString,
         title: docTitle,
         sourceType: 'encrypted_html'
       };

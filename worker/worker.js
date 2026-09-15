@@ -132,9 +132,15 @@ export default {
       }
 
       // 3. GET /:id: Serve HTML document from Workers KV
-      if (request.method === 'GET' && pathname.length > 1 && !pathname.startsWith('/api/')) {
+      if ((request.method === 'GET' || request.method === 'HEAD') && pathname.length > 1 && !pathname.startsWith('/api/')) {
         if (!env.MY_KV || typeof env.MY_KV.get !== 'function') {
-          return new Response('Server configuration error: MY_KV namespace is not properly bound in Worker settings.', { status: 500 });
+          return new Response('Server configuration error: MY_KV namespace is not properly bound in Worker settings.', {
+            status: 500,
+            headers: {
+              'Content-Type': 'text/plain; charset=utf-8',
+              ...getCorsHeaders(),
+            }
+          });
         }
 
         const id = pathname.substring(1).trim();
@@ -189,6 +195,7 @@ export default {
             headers: {
               'Content-Type': 'text/html; charset=utf-8',
               'X-Robots-Tag': 'noindex, nofollow',
+              ...getCorsHeaders(),
             },
           });
         }
