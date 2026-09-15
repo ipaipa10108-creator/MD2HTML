@@ -572,11 +572,11 @@ function ImportModalContent({ onClose, onApplyImport, showToast }) {
                     return (
                       <div
                         key={item.id}
-                        className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-800/70 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all flex items-center justify-between gap-3"
+                        className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-800/70 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5"
                       >
                         <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold whitespace-nowrap ${
                               item.provider === 'github'
                                 ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300'
                                 : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
@@ -584,14 +584,14 @@ function ImportModalContent({ onClose, onApplyImport, showToast }) {
                               {item.provider === 'github' ? '🐙 GitHub' : '☁️ CF KV'}
                             </span>
                             {item.isEncrypted && (
-                              <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">🔒 密碼保護</span>
+                              <span className="inline-flex items-center text-[10px] font-bold text-amber-600 dark:text-amber-400 whitespace-nowrap">🔒 密碼保護</span>
                             )}
-                            <h4 className="font-bold text-xs text-slate-800 dark:text-slate-100 truncate">
+                            <h4 className="font-bold text-xs text-slate-800 dark:text-slate-100 break-words flex-1 min-w-0">
                               {displayTitle}
                             </h4>
                           </div>
                           {displaySubtitle && (
-                            <p className="text-[11px] text-slate-400 truncate">
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
                               {displaySubtitle}
                             </p>
                           )}
@@ -603,7 +603,7 @@ function ImportModalContent({ onClose, onApplyImport, showToast }) {
                         <button
                           type="button"
                           onClick={() => handleFetchUrl(item.url)}
-                          className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-600 hover:text-white text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-lg border border-indigo-200 dark:border-indigo-800 transition-all shrink-0 flex items-center gap-1"
+                          className="w-full sm:w-auto px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-600 hover:text-white text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-lg border border-indigo-200 dark:border-indigo-800 transition-all shrink-0 flex items-center justify-center gap-1 active:scale-95"
                         >
                           <span>✏️</span>
                           <span>載入此文件</span>

@@ -33,7 +33,7 @@ export function resolveHistoryItemInfo(item) {
   // 1. 如果原始標題除去「主題分享：」後有明確主題文字，以此為主標題
   if (cleanedTitle) {
     const cleanedDesc = rawDesc && rawDesc !== rawTitle && cleanPrefix(rawDesc) !== cleanedTitle
-      ? rawDesc.split(/\r?\n/).map(l => cleanPrefix(l)).filter(Boolean).slice(0, 2).join(' · ')
+      ? rawDesc.split(/\r?\n/).map(l => cleanPrefix(l)).filter(Boolean).slice(0, 4).join(' · ')
       : '';
     return {
       title: cleanedTitle,
@@ -60,7 +60,7 @@ export function resolveHistoryItemInfo(item) {
     if (validSegments.length > 0) {
       return {
         title: validSegments[0],
-        subtitle: validSegments.length > 1 ? validSegments.slice(1, 3).join(' · ') : '',
+        subtitle: validSegments.length > 1 ? validSegments.slice(1, 5).join(' · ') : '',
         hasRealTitle: true
       };
     }
@@ -474,13 +474,13 @@ function PublishHistoryModalContent({ onClose, showToast, onApplyImport }) {
               return (
                 <div
                   key={item.id}
-                  className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-white/60 dark:bg-slate-900/60 hover:border-indigo-200 dark:hover:border-indigo-900 transition-all space-y-2.5"
+                  className="p-3.5 sm:p-4 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 hover:border-indigo-200 dark:hover:border-indigo-900 transition-all shadow-xs space-y-2.5"
                 >
-                  {/* 頂部列：平台與加密狀態標籤 (左) + 快捷按鈕 (右) */}
-                  <div className="flex items-center justify-between gap-2">
+                  {/* 1. 頂部標籤與發布時間列：橫向排列，避免行動端標籤被擠壓成直立 */}
+                  <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      {/* Provider Badge */}
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                      {/* 平台標籤 */}
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap ${
                         isGitHub
                           ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200/60 dark:border-purple-800/60'
                           : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200/60 dark:border-blue-800/60'
@@ -488,91 +488,100 @@ function PublishHistoryModalContent({ onClose, showToast, onApplyImport }) {
                         {isGitHub ? '🐙 GitHub' : '☁️ CF KV'}
                       </span>
 
-                      {/* Encrypted Badge */}
+                      {/* 公開 / 密碼加密標籤 */}
                       {item.isEncrypted ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60 whitespace-nowrap">
                           🔒 密碼保護
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 whitespace-nowrap">
                           🌐 公開
                         </span>
                       )}
 
-                      {/* Synced Badge */}
+                      {/* 雲端同步標籤 */}
                       {item.isSynced && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60 whitespace-nowrap">
                           ☁️ 雲端同步
                         </span>
                       )}
                     </div>
 
-                    {/* Action buttons */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => handleCopy(item.url, '📋 短網址已複製！')}
-                        className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
-                        title="複製網址"
-                      >
-                        <span>📋</span>
-                        <span>複製</span>
-                      </button>
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
-                        title="在新分頁開啟"
-                      >
-                        <span>🔗</span>
-                        <span>開啟</span>
-                      </a>
-                      <button
-                        onClick={() => handleImportToEditor(item)}
-                        disabled={importingId === item.id}
-                        className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
-                        title="將此已發布文件直接載入編輯器進行修改"
-                      >
-                        <span>{importingId === item.id ? '⏳' : '✏️'}</span>
-                        <span>匯入編輯</span>
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item)}
-                        disabled={isDeleting}
-                        className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg text-xs font-semibold transition-all disabled:opacity-40 flex items-center gap-1"
-                        title="下架刪除此文件"
-                      >
-                        <span>{isDeleting ? '⏳' : '🗑️'}</span>
-                        <span>刪除</span>
-                      </button>
+                    {/* 發布時間 */}
+                    <div className="text-[11px] text-slate-400 dark:text-slate-500 whitespace-nowrap font-medium flex items-center gap-1">
+                      <span>🕒</span>
+                      <span>{formattedDate}</span>
                     </div>
                   </div>
 
-                  {/* 標題列：獨立佔滿整行，避免被按鈕或標籤排擠截斷 */}
-                  <div className="space-y-1">
-                    <h4 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100 leading-snug break-words">
+                  {/* 2. 標題與內文摘要：充分展現檔案內容 */}
+                  <div className="space-y-1.5">
+                    <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100 leading-snug break-words">
                       {displayTitle}
                     </h4>
                     {displaySubtitle && (
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed break-words bg-slate-50/70 dark:bg-slate-800/40 px-2.5 py-1.5 rounded-lg border border-slate-100/80 dark:border-slate-800/60">
-                        {displaySubtitle}
-                      </p>
+                      <div className="bg-slate-50/80 dark:bg-slate-800/40 px-3 py-2 rounded-lg border border-slate-100 dark:border-slate-800/60">
+                        <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-3 sm:line-clamp-4 leading-relaxed break-words">
+                          {displaySubtitle}
+                        </p>
+                      </div>
                     )}
                   </div>
 
-                  {/* 資訊列：發布時間與密碼 */}
-                  <div className="text-[11px] text-slate-400 flex items-center justify-between flex-wrap gap-2">
-                    <span>🕒 {formattedDate}</span>
+                  {/* 3. 網址與密碼列 */}
+                  <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 px-2.5 py-1.5 rounded-lg border border-slate-100 dark:border-slate-800/60 text-[11px]">
+                    <span className="text-slate-400 shrink-0 select-none">🔗</span>
+                    <span className="font-mono text-indigo-600 dark:text-indigo-400 truncate flex-1 select-all">
+                      {item.url}
+                    </span>
                     {item.isEncrypted && item.password && (
-                      <span className="text-amber-600 dark:text-amber-400 font-mono text-xs font-bold bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200/50 dark:border-amber-800/50">
+                      <span className="shrink-0 text-amber-700 dark:text-amber-300 font-mono text-[10px] font-bold bg-amber-100/90 dark:bg-amber-950/70 px-2 py-0.5 rounded border border-amber-200/70 dark:border-amber-800/70 whitespace-nowrap">
                         🔑 密碼: {item.password}
                       </span>
                     )}
                   </div>
 
-                  {/* URL Display */}
-                  <div className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400 bg-slate-50 dark:bg-slate-800/50 px-2.5 py-1.5 rounded-lg truncate select-all border border-slate-100 dark:border-slate-800/60">
-                    {item.url}
+                  {/* 4. 底部功能操作按鈕列：均勻合理分布，行動端滿版點擊友善 */}
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800/70 grid grid-cols-4 sm:flex sm:justify-end gap-1.5 sm:gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(item.url, '📋 短網址已複製！')}
+                      className="py-1.5 px-2 bg-slate-100/80 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1 active:scale-95"
+                      title="複製網址"
+                    >
+                      <span>📋</span>
+                      <span>複製</span>
+                    </button>
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="py-1.5 px-2 bg-slate-100/80 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1 active:scale-95"
+                      title="在新分頁開啟"
+                    >
+                      <span>🔗</span>
+                      <span>開啟</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => handleImportToEditor(item)}
+                      disabled={importingId === item.id}
+                      className="py-1.5 px-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold border border-indigo-200/60 dark:border-indigo-800/60 transition-all flex items-center justify-center gap-1 active:scale-95"
+                      title="將此已發布文件直接載入編輯器進行修改"
+                    >
+                      <span>{importingId === item.id ? '⏳' : '✏️'}</span>
+                      <span>匯入<span className="hidden sm:inline">編輯</span></span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(item)}
+                      disabled={isDeleting}
+                      className="py-1.5 px-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded-lg text-xs font-semibold border border-red-200/50 dark:border-red-900/50 transition-all disabled:opacity-40 flex items-center justify-center gap-1 active:scale-95"
+                      title="下架刪除此文件"
+                    >
+                      <span>{isDeleting ? '⏳' : '🗑️'}</span>
+                      <span>刪除</span>
+                    </button>
                   </div>
                 </div>
               );
