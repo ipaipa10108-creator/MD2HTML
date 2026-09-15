@@ -59,7 +59,7 @@ turndownService.addRule('table', {
     const rows = Array.from(node.rows);
     if (rows.length === 0) return '';
     let mdTable = '\n';
-    
+
     rows.forEach((row, rowIndex) => {
       let mdRow = '|';
       const cells = Array.from(row.cells);
@@ -67,7 +67,7 @@ turndownService.addRule('table', {
         mdRow += ` ${cell.textContent.trim().replace(/\n/g, ' ')} |`;
       });
       mdTable += mdRow + '\n';
-      
+
       // Inject alignment divider row right after header row
       if (rowIndex === 0) {
         let divider = '|';
@@ -310,7 +310,7 @@ const parseHeadings = (md) => {
   const lines = md.split('\n');
   const headings = [];
   let headingCount = 0;
-  
+
   lines.forEach((line) => {
     const match = line.match(/^(#{1,6})\s+(.+)$/);
     if (match) {
@@ -343,7 +343,7 @@ const findDiffIndex = (oldStr, newStr) => {
 // Helper to find a text node or element containing a specific text snippet
 const findDOMNodeByText = (root, searchText) => {
   if (!root || !searchText) return null;
-  
+
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
   let node;
   while ((node = walker.nextNode())) {
@@ -351,28 +351,28 @@ const findDOMNodeByText = (root, searchText) => {
       return node;
     }
   }
-  
+
   const elements = root.getElementsByTagName('*');
   for (let el of elements) {
     if (el.innerText && el.innerText.includes(searchText) && el.children.length === 0) {
       return el;
     }
   }
-  
+
   return null;
 };
 
 // Helper to parse YAML Front Matter
 const parseFrontMatter = (md) => {
   if (!md || !md.startsWith('---')) return { markdown: md, metadata: null, rawFrontMatter: '' };
-  
+
   const match = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
   if (!match) return { markdown: md, metadata: null, rawFrontMatter: '' };
-  
+
   const rawFrontMatter = match[0];
   const yamlText = match[1];
   const remainingMarkdown = md.substring(match[0].length);
-  
+
   const metadata = {};
   const lines = yamlText.split(/\r?\n/);
   lines.forEach(line => {
@@ -380,11 +380,11 @@ const parseFrontMatter = (md) => {
     if (colonIdx !== -1) {
       const key = line.substring(0, colonIdx).trim().toLowerCase();
       let value = line.substring(colonIdx + 1).trim();
-      
+
       if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
         value = value.substring(1, value.length - 1);
       }
-      
+
       if (key === 'tags') {
         if (value.startsWith('[') && value.endsWith(']')) {
           metadata.tags = value.substring(1, value.length - 1).split(',').map(t => t.trim().replace(/['"]/g, ''));
@@ -398,22 +398,22 @@ const parseFrontMatter = (md) => {
       }
     }
   });
-  
+
   return { markdown: remainingMarkdown, metadata, rawFrontMatter };
 };
 
 // Render YAML metadata card
 const renderMetadataCard = (metadata) => {
   if (!metadata) return '';
-  
+
   const title = metadata.title || '';
   const description = metadata.description || metadata.desc || '';
   const date = metadata.date || '';
   const tags = metadata.tags || [];
   const isDraft = metadata.draft;
-  
+
   if (!title && !description && !date && tags.length === 0 && !isDraft) return '';
-  
+
   const tagsHtml = tags.map(tag => `
     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-100/50 dark:border-indigo-900/30">
       # ${tag}
@@ -455,18 +455,18 @@ const sanitizeHtml = (htmlContent) => {
 // Helper to resolve relative path images to blob URLs
 const resolveImageSources = (htmlString, map) => {
   if (!map || Object.keys(map).length === 0) return htmlString;
-  
+
   const parser = new DOMParser();
   const doc = parser.parseFromString(htmlString, 'text/html');
   const imgs = doc.querySelectorAll('img');
   let modified = false;
-  
+
   imgs.forEach(img => {
     const src = img.getAttribute('src');
     if (src) {
       const decodedSrc = decodeURIComponent(src);
       const cleanSrc = decodedSrc.replace(/^\.\//, '');
-      
+
       for (const [key, value] of Object.entries(map)) {
         if (key === cleanSrc || key.endsWith('/' + cleanSrc) || cleanSrc.endsWith('/' + key)) {
           img.setAttribute('src', value);
@@ -476,7 +476,7 @@ const resolveImageSources = (htmlString, map) => {
       }
     }
   });
-  
+
   return modified ? doc.body.innerHTML : htmlString;
 };
 
@@ -485,18 +485,18 @@ let cachedFontBase64 = null;
 
 const fetchFontWithCache = async () => {
   if (cachedFontBase64) return cachedFontBase64;
-  
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 25000);
-  
+
   const url = 'https://cdn.jsdelivr.net/gh/lxgw/LxgwWenKai-Lite@main/fonts/TTF/LXGWWenKaiLite-Regular.ttf';
   const response = await fetch(url, { signal: controller.signal });
   clearTimeout(timeoutId);
-  
+
   if (!response.ok) throw new Error(`Failed to fetch font from CDN (status: ${response.status})`);
-  
+
   const buffer = await response.arrayBuffer();
-  
+
   // Safe ArrayBuffer to Base64 conversion without call stack limitations
   let binary = '';
   const bytes = new Uint8Array(buffer);
@@ -574,7 +574,7 @@ const repairAIArtifacts = (text) => {
 
     if (inCode && (codeLang === 'mermaid' || codeLang === '')) {
       if (/^(graph|flowchart|sequencediagram|classdiagram|statediagram|erdiagram|journey|gantt|pie|gitgraph|mindmap|timeline|quadrantchart|sankey-beta|zenuml)\b/i.test(trimmed) ||
-          /(-->|---|==>|\bparticipant\b|\bactor\b|\[".*"\])/.test(trimmed)) {
+        /(-->|---|==>|\bparticipant\b|\bactor\b|\[".*"\])/.test(trimmed)) {
         codeHasMermaidStatements = true;
       }
 
@@ -1134,7 +1134,7 @@ const renderAllMermaidDiagrams = async (isDark) => {
 
       mermaidRenderCounter++;
       const id = `mermaid-svg-${Date.now()}-${mermaidRenderCounter}-${Math.random().toString(36).substring(2, 6)}`;
-      
+
       try {
         const { svg } = await mermaid.render(id, rawCode);
         const target = container.querySelector('.mermaid-svg-container') || container;
@@ -1143,7 +1143,7 @@ const renderAllMermaidDiagrams = async (isDark) => {
         console.warn('Mermaid rendering failed for code:', rawCode, renderErr);
         const errEl = document.getElementById(id) || document.getElementById('d' + id);
         if (errEl && errEl.parentNode) errEl.parentNode.removeChild(errEl);
-        
+
         const target = container.querySelector('.mermaid-svg-container') || container;
         target.innerHTML = `<div class="w-full text-left p-3 text-xs rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/50 select-none">
           <div class="font-bold flex items-center gap-1.5 mb-1">
@@ -1175,7 +1175,7 @@ export default function App() {
     let shouldBeautify = true;
     try {
       shouldBeautify = localStorage.getItem('md2html-auto-beautify-share') !== 'false';
-    } catch {}
+    } catch { }
     return shouldBeautify ? cleanAndBeautifyText(sharedText) : sharedText;
   })();
   const initialParse = parseMarkdownToHtml(defaultMarkdown);
@@ -1594,7 +1594,7 @@ export default function App() {
       let shouldSwitch = true;
       try {
         shouldSwitch = localStorage.getItem('md2html-auto-switch-beautify') !== 'false';
-      } catch {}
+      } catch { }
       return shouldSwitch ? 'reading' : 'markdown';
     }
     return 'markdown';
@@ -1830,7 +1830,7 @@ export default function App() {
       if (prev.length > 0 && prev[0].markdown === md) return prev;
       const entry = { id: Date.now(), label, markdown: md, timestamp: Date.now() };
       const next = [entry, ...prev.filter(e => e.markdown !== md)].slice(0, 20);
-      try { localStorage.setItem('file-history', JSON.stringify(next)); } catch {}
+      try { localStorage.setItem('file-history', JSON.stringify(next)); } catch { }
       return next;
     });
   };
@@ -1879,7 +1879,7 @@ export default function App() {
   const handleLoadLocalImages = (e) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    
+
     const newMap = { ...imageMap };
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -1887,7 +1887,7 @@ export default function App() {
       // Strip root folder name if webkitRelativePath exists
       const parts = path.split('/');
       const cleanKey = parts.slice(1).join('/') || file.name;
-      
+
       const url = URL.createObjectURL(file);
       newMap[cleanKey] = url;
       newMap[file.name] = url;
@@ -1940,7 +1940,7 @@ export default function App() {
             } catch (e) {
               continue;
             }
-            
+
             const svgId = `mermaid-svg-${Math.random().toString(36).substring(2, 11)}`;
             try {
               await mermaid.parse(rawCode);
@@ -1974,7 +1974,7 @@ export default function App() {
           renderDiagrams(mermaidRef.current);
         }
       }, debounce);
-      
+
       return () => {
         active = false;
         clearTimeout(timer);
@@ -2056,7 +2056,7 @@ export default function App() {
           const file = await new Promise((resolve) => item.file(resolve));
           const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
           const relativePath = path + file.name;
-          
+
           if (['.md', '.txt'].includes(ext)) {
             mdContent = await file.text();
             mdFileName = file.name;
@@ -2078,7 +2078,7 @@ export default function App() {
               dirReader.readEntries(resolve);
             });
           };
-          
+
           let entries = await readEntries();
           for (const entry of entries) {
             await traverseFileTree(entry, path + item.name + '/');
@@ -2209,7 +2209,7 @@ export default function App() {
           setTimeout(checkSharedData, 100);
         }
       };
-      
+
       checkSharedData();
     }
   }, [sharedText, autoBeautifyOnShare, autoSwitchAfterBeautify]);
@@ -2219,7 +2219,7 @@ export default function App() {
   const handleScroll = (e) => {
     // Only auto-hide on mobile devices (e.g. window.innerWidth < 768)
     if (window.innerWidth >= 768) return;
-    
+
     // If the user is currently editing, don't hide
     if (isReadingEditable) return;
     if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') {
@@ -2228,7 +2228,7 @@ export default function App() {
 
     const scrollTop = e.currentTarget.scrollTop;
     const diff = scrollTop - lastScrollY.current;
-    
+
     if (scrollTop > 20 && Math.abs(diff) > 8) {
       if (diff > 0) {
         // Scrolling down -> hide toolbars
@@ -2260,7 +2260,7 @@ export default function App() {
       if (copyBtn) {
         e.stopPropagation();
         e.preventDefault();
-        
+
         const wrapper = copyBtn.closest('.code-block-wrapper');
         const pre = wrapper ? wrapper.querySelector('pre') : null;
         if (pre) {
@@ -2284,30 +2284,30 @@ export default function App() {
   // Align left pane cursor and scroll when right pane is modified
   const alignLeftPaneToRight = (targetPane, oldTargetVal, newTargetVal) => {
     if (layout !== 'double') return;
-    
+
     // Find the first index of difference
     const diffIdx = findDiffIndex(oldTargetVal, newTargetVal);
     if (diffIdx === -1) return;
-    
+
     // Schedule the scroll/caret highlight in the next tick (after DOM updates)
     setTimeout(() => {
       const leftEl = leftPaneElementRef.current;
       if (!leftEl) return;
-      
+
       if (targetPane === 'markdown' || targetPane === 'html') {
         // Target is a textarea
         try {
           // 1. Set the caret position (selectionStart/selectionEnd)
           leftEl.focus();
           leftEl.setSelectionRange(diffIdx, diffIdx);
-          
+
           // 2. Scroll the textarea to make the modified line visible
           const textBefore = newTargetVal.substring(0, diffIdx);
           const lineIndex = textBefore.split('\n').length - 1;
-          
+
           const computedStyle = window.getComputedStyle(leftEl);
           const lineHeight = parseInt(computedStyle.lineHeight) || 20;
-          
+
           leftEl.scrollTop = Math.max(0, lineIndex * lineHeight - leftEl.clientHeight / 2);
 
           // Restore focus to the active element (which is the right pane textarea)
@@ -2323,33 +2323,33 @@ export default function App() {
         // The inner contentEditable element is leftReadingViewRef.current
         const readingDiv = leftReadingViewRef.current;
         if (!readingDiv) return;
-        
+
         try {
           // Convert HTML string to plain text to find the text diff index
           const tempDiv = document.createElement('div');
           tempDiv.innerHTML = newTargetVal;
           const newPlainText = tempDiv.innerText;
-          
+
           const tempOldDiv = document.createElement('div');
           tempOldDiv.innerHTML = oldTargetVal;
           const oldPlainText = tempOldDiv.innerText;
-          
+
           const textDiffIdx = findDiffIndex(oldPlainText, newPlainText);
           if (textDiffIdx === -1) return;
-          
+
           // Get a text snippet around the edit position to search in DOM
           const start = Math.max(0, textDiffIdx - 10);
           const end = Math.min(newPlainText.length, textDiffIdx + 10);
           const snippet = newPlainText.substring(start, end).trim();
-          
+
           if (snippet.length > 2) {
             const targetNode = findDOMNodeByText(readingDiv, snippet);
             if (targetNode) {
               const elementToScroll = targetNode.nodeType === Node.TEXT_NODE ? targetNode.parentElement : targetNode;
-              
+
               // Scroll the element into view of the container
               elementToScroll.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              
+
               // Add a visual flash highlight
               elementToScroll.classList.add('animate-change-highlight');
               setTimeout(() => {
@@ -2383,7 +2383,7 @@ export default function App() {
       const nextIdx = historyIndex - 1;
       setHistoryIndex(nextIdx);
       const prevMD = history[nextIdx];
-      
+
       activePaneRef.current = 'history';
       setMarkdown(prevMD);
       const { html: parsedHTML, readingHtml: parsedReadingHtml, rawFrontMatter } = parseMarkdownToHtml(prevMD);
@@ -2415,7 +2415,7 @@ export default function App() {
     activePaneRef.current = 'markdown';
     const oldHtml = html;
     setMarkdown(val);
-    
+
     const { html: parsedHTML, readingHtml: parsedReadingHtml, rawFrontMatter } = parseMarkdownToHtml(val);
     setFrontMatterRaw(rawFrontMatter);
     setHtml(parsedHTML);
@@ -2457,10 +2457,10 @@ export default function App() {
     activePaneRef.current = 'html';
     const oldMarkdown = markdown;
     const oldHtml = html;
-    
+
     const sanitizedHTML = sanitizeHtml(val);
     setHtml(sanitizedHTML);
-    
+
     const { metadata } = parseFrontMatter(markdown);
     const metadataHtml = renderMetadataCard(metadata);
     setReadingHtml(metadataHtml + sanitizedHTML);
@@ -2510,9 +2510,9 @@ export default function App() {
     const innerHTML = e.currentTarget.innerHTML;
     const oldMarkdown = markdown;
     const oldHtml = html;
-    
+
     const sanitizedHTML = sanitizeHtml(innerHTML);
-    
+
     const parser = new DOMParser();
     const doc = parser.parseFromString(sanitizedHTML, 'text/html');
     const metaCard = doc.querySelector('.metadata-card-wrapper');
@@ -2520,10 +2520,10 @@ export default function App() {
       metaCard.remove();
     }
     const cleanBodyHtml = doc.body.innerHTML;
-    
+
     setHtml(cleanBodyHtml);
     setReadingHtml(sanitizedHTML);
-    
+
     const convertedMD = turndownService.turndown(cleanBodyHtml);
     const finalMD = frontMatterRaw + convertedMD;
     setMarkdown(finalMD);
@@ -2561,7 +2561,7 @@ export default function App() {
         copyText = html.replace(/<[^>]*>/g, '');
       }
     }
-    
+
     navigator.clipboard.writeText(copyText)
       .then(() => triggerCopiedFeedback(panelId))
       .catch(err => console.error('Failed to copy text: ', err));
@@ -2599,7 +2599,7 @@ export default function App() {
       showToast('目前沒有可美化的 Markdown 內容！', 'info');
       return;
     }
-    
+
     const beautified = cleanAndBeautifyText(markdown);
     if (beautified === markdown.trim()) {
       showToast('內容格式已非常整齊，無需額外調整！', 'info');
@@ -2658,14 +2658,14 @@ export default function App() {
       // Calculate PDF dimensions (A4 size: 595.28 pt x 841.89 pt)
       const pdfWidth = 595.28;
       const pdfHeight = 841.89;
-      
+
       // Calculate scale factor to fit PDF width
       const ratio = pdfWidth / (imgWidth / 2); // image width divided by scale factor 2
-      
+
       // Calculate how many canvas pixels fit on one A4 page
       const pageHeightInCanvas = (pdfHeight / ratio) * 2; // page height in canvas scale 2
       const totalPages = Math.ceil(imgHeight / pageHeightInCanvas);
-      
+
       // Load jsPDF dynamically
       const { jsPDF } = await import('jspdf');
       const pdf = new jsPDF({
@@ -2694,21 +2694,21 @@ export default function App() {
 
       for (let i = 0; i < totalPages; i++) {
         if (i > 0) pdf.addPage();
-        
+
         const startY = i * pageHeightInCanvas;
         const currentHeight = Math.min(pageHeightInCanvas, imgHeight - startY);
-        
+
         // Draw slice of the main canvas to a temporary slice canvas
         const sliceCanvas = document.createElement('canvas');
         sliceCanvas.width = imgWidth;
         sliceCanvas.height = currentHeight;
-        
+
         const ctx = sliceCanvas.getContext('2d');
         ctx.drawImage(canvas, 0, startY, imgWidth, currentHeight, 0, 0, imgWidth, currentHeight);
-        
+
         const sliceImgData = sliceCanvas.toDataURL('image/jpeg', 0.95);
         const destHeight = (currentHeight / 2) * ratio;
-        
+
         pdf.addImage(sliceImgData, 'JPEG', 0, 0, pdfWidth, destHeight);
       }
 
@@ -2753,7 +2753,7 @@ export default function App() {
     try {
       // 1. Fetch Chinese font
       const fontBase64 = await fetchFontWithCache();
-      
+
       // 2. Load jsPDF
       const { jsPDF } = await import('jspdf');
       const pdf = new jsPDF({
@@ -2779,20 +2779,20 @@ export default function App() {
         author: 'MD2HTML',
         creator: 'MD2HTML'
       });
-      
+
       // 3. Register and set font
       pdf.addFileToVFS('LXGWWenKaiLite.ttf', fontBase64);
       pdf.addFont('LXGWWenKaiLite.ttf', 'LXGWWenKaiLite', 'normal');
       pdf.setFont('LXGWWenKaiLite');
-      
+
       // 4. Set document parameters
       const pageHeight = 841.89;
       const pageWidth = 595.28;
       const margin = 50;
       const printableWidth = pageWidth - 2 * margin;
-      
+
       let currentY = margin;
-      
+
       const checkPageBreak = (neededHeight) => {
         if (currentY + neededHeight > pageHeight - margin) {
           pdf.addPage();
@@ -2800,33 +2800,33 @@ export default function App() {
           currentY = margin;
         }
       };
-      
+
       // Parse markdown text line-by-line (strip front matter if present)
       const { markdown: cleanMd } = parseFrontMatter(markdown);
       const lines = cleanMd.split(/\r?\n/);
       let inCodeBlock = false;
-      
+
       for (let i = 0; i < lines.length; i++) {
         let line = lines[i].trimEnd();
-        
+
         // Skip empty lines, but add vertical spacing
         if (line.trim() === '') {
           currentY += 12;
           continue;
         }
-        
+
         // Code blocks block toggle
         if (line.startsWith('```')) {
           inCodeBlock = !inCodeBlock;
           continue;
         }
-        
+
         if (inCodeBlock) {
           // Inside a code block, use smaller font and distinct style
           pdf.setFontSize(10);
           const wrapped = pdf.splitTextToSize(line, printableWidth - 20);
           const lineHeight = 15;
-          
+
           wrapped.forEach(l => {
             checkPageBreak(lineHeight);
             // Draw light background for code line
@@ -2840,29 +2840,29 @@ export default function App() {
           pdf.setFontSize(11);
           continue;
         }
-        
+
         // Headers
         if (line.startsWith('#')) {
           const match = line.match(/^(#{1,6})\s+(.*)$/);
           if (match) {
             const level = match[1].length;
             const text = match[2];
-            
+
             let fontSize = 11;
             let spacingBefore = 15;
             let spacingAfter = 8;
-            
+
             if (level === 1) { fontSize = 20; spacingBefore = 20; }
             else if (level === 2) { fontSize = 16; spacingBefore = 18; }
             else if (level === 3) { fontSize = 14; spacingBefore = 14; }
             else { fontSize = 12; spacingBefore = 12; }
-            
+
             currentY += spacingBefore;
             pdf.setFontSize(fontSize);
-            
+
             const wrapped = pdf.splitTextToSize(text, printableWidth);
             const lineHeight = fontSize * 1.3;
-            
+
             wrapped.forEach(l => {
               checkPageBreak(lineHeight);
               pdf.text(l, margin, currentY);
@@ -2870,20 +2870,20 @@ export default function App() {
               pdf.text(l, margin + 0.3, currentY);
               currentY += lineHeight;
             });
-            
+
             currentY += spacingAfter;
             pdf.setFontSize(11);
             continue;
           }
         }
-        
+
         // Blockquotes
         if (line.startsWith('>')) {
           const text = line.substring(1).trim();
           pdf.setFontSize(10.5);
           const wrapped = pdf.splitTextToSize(text, printableWidth - 20);
           const lineHeight = 16;
-          
+
           const startY = currentY - 10;
           wrapped.forEach(l => {
             checkPageBreak(lineHeight);
@@ -2891,23 +2891,23 @@ export default function App() {
             currentY += lineHeight;
           });
           const endY = currentY - 10;
-          
+
           // Draw blockquote border line
           pdf.setDrawColor(200, 200, 200);
           pdf.setLineWidth(2);
           pdf.line(margin + 5, startY, margin + 5, endY);
-          
+
           pdf.setFontSize(11);
           continue;
         }
-        
+
         // List items
         const listMatch = line.match(/^(\s*)(-\s+|\*\s+|\+\s+|\d+\.\s+)(.*)$/);
         if (listMatch) {
           const indentLevel = listMatch[1].length;
           const marker = listMatch[2];
           const text = listMatch[3];
-          
+
           const isNumbered = /^\d+/.test(marker.trim());
           let displayMarker = isNumbered ? marker.trim() : '•';
           let itemText = text;
@@ -2916,12 +2916,12 @@ export default function App() {
             displayMarker = isChecked ? '[✓]' : '[  ]';
             itemText = text.replace(/^\[[ xX]\]\s*/, '');
           }
-          
+
           const indentWidth = 15 + indentLevel * 10;
           pdf.setFontSize(11);
           const wrapped = pdf.splitTextToSize(itemText, printableWidth - indentWidth);
           const lineHeight = 16;
-          
+
           wrapped.forEach((l, idx) => {
             checkPageBreak(lineHeight);
             if (idx === 0) {
@@ -2932,29 +2932,29 @@ export default function App() {
           });
           continue;
         }
-        
+
         // Standard Paragraph
         pdf.setFontSize(11);
         const wrapped = pdf.splitTextToSize(line.trim(), printableWidth);
         const lineHeight = 16;
-        
+
         wrapped.forEach(l => {
           checkPageBreak(lineHeight);
           pdf.text(l, margin, currentY);
           currentY += lineHeight;
         });
       }
-      
+
       const ts = getTimestampString();
       const fileName = `md2pdf_text_${ts}.pdf`;
-      
+
       if (action === 'download') {
         pdf.save(fileName);
         showToast('✅ 文字版 PDF 已成功儲存至本地！', 'success');
       } else if (action === 'share') {
         const pdfBlob = pdf.output('blob');
         const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
-        
+
         if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
           try {
             await navigator.share({
@@ -2996,7 +2996,7 @@ export default function App() {
     const doc = parser.parseFromString(sourceHtml, 'text/html');
     const docHeadings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6');
     const exportedHeadings = [];
-    
+
     docHeadings.forEach((heading, index) => {
       const id = `h-${index}`;
       heading.setAttribute('id', id);
@@ -3006,7 +3006,7 @@ export default function App() {
         text: heading.textContent || ''
       });
     });
-    
+
     const articleContentHtml = doc.body.innerHTML;
     return { articleContentHtml, exportedHeadings };
   };
@@ -3016,7 +3016,7 @@ export default function App() {
     try {
       const { articleContentHtml, exportedHeadings } = generateExportHTML();
       const hasMermaidInExport = markdown.includes('```mermaid');
-      
+
       let tocHtml = '';
       if (exportedHeadings.length === 0) {
         tocHtml = '<div class="toc-empty">無章節大綱</div>';
@@ -3025,7 +3025,7 @@ export default function App() {
           let levelClass = 'l1';
           if (h.level === 3) levelClass = 'l2';
           else if (h.level >= 4) levelClass = 'l3';
-          
+
           tocHtml += `<a class="toc-link ${levelClass}" href="#${h.id}" data-id="${h.id}">
             <span class="toc-bullet"></span>
             <span class="toc-text">${escapeHtml(h.text)}</span>
@@ -3062,7 +3062,7 @@ export default function App() {
       }
 
       const title = titleHeader || (exportedHeadings.length > 0 ? exportedHeadings[0].text : 'Markdown 匯出文件');
-      
+
       // Always start with sidebar-expanded for desktop; JS will collapse on mobile at runtime
       const bodyClass = exportedHeadings.length === 0 ? 'no-sidebar' : 'sidebar-expanded';
 
@@ -4132,17 +4132,17 @@ export default function App() {
   ` : ''}
   <script id="md2html-metadata" type="application/json">
 ${JSON.stringify({
-  generator: 'MD2HTML',
-  version: '1.0',
-  exportedAt: new Date().toISOString(),
-  title,
-  theme: exportTheme,
-  markdown
-})}
+        generator: 'MD2HTML',
+        version: '1.0',
+        exportedAt: new Date().toISOString(),
+        title,
+        theme: exportTheme,
+        markdown
+      })}
   </script>
 </body>
 </html>`;
-      
+
       const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
 
       // On desktop (non-touch), skip the filename modal — the OS save dialog lets users rename
@@ -4173,7 +4173,7 @@ ${JSON.stringify({
 
   const proceedExportHTML = async () => {
     if (!exportHTMLBlob || !pendingHtmlAction) return;
-    
+
     let fileName = tempExportFilename.trim();
     if (!fileName) {
       fileName = 'export.html';
@@ -4183,7 +4183,7 @@ ${JSON.stringify({
     }
 
     setShowFilenameModal(false);
-    
+
     try {
       if (pendingHtmlAction === 'download') {
         const url = URL.createObjectURL(exportHTMLBlob);
@@ -4286,14 +4286,14 @@ ${JSON.stringify({
         for (let i = 0; i < parts; i++) {
           const startY = i * sliceHeight;
           const currentHeight = Math.min(sliceHeight, mainHeight - startY);
-          
+
           const sliceCanvas = document.createElement('canvas');
           sliceCanvas.width = mainWidth;
           sliceCanvas.height = currentHeight;
-          
+
           const ctx = sliceCanvas.getContext('2d');
           ctx.drawImage(canvas, 0, startY, mainWidth, currentHeight, 0, 0, mainWidth, currentHeight);
-          
+
           const url = sliceCanvas.toDataURL('image/png');
           generated.push({
             name: `${prefix}_${i + 1}.png`,
@@ -4305,19 +4305,19 @@ ${JSON.stringify({
       } else if (sliceMode === 'height') {
         const targetHeight = Math.max(100, parseInt(fixedHeight) || 800);
         const scaledHeight = targetHeight * 2;
-        
+
         let currentY = 0;
         let index = 1;
         while (currentY < mainHeight) {
           const currentHeight = Math.min(scaledHeight, mainHeight - currentY);
-          
+
           const sliceCanvas = document.createElement('canvas');
           sliceCanvas.width = mainWidth;
           sliceCanvas.height = currentHeight;
-          
+
           const ctx = sliceCanvas.getContext('2d');
           ctx.drawImage(canvas, 0, currentY, mainWidth, currentHeight, 0, 0, mainWidth, currentHeight);
-          
+
           const url = sliceCanvas.toDataURL('image/png');
           generated.push({
             name: `${prefix}_${index}.png`,
@@ -4325,13 +4325,13 @@ ${JSON.stringify({
             width: mainWidth / 2,
             height: currentHeight / 2
           });
-          
+
           currentY += scaledHeight;
           index++;
         }
       }
       setSlices(generated);
-      
+
       // Auto-select all slices by default
       const initialSelected = {};
       generated.forEach((_, idx) => {
@@ -4352,7 +4352,7 @@ ${JSON.stringify({
     try {
       const response = await fetch(slice.url);
       const blob = await response.blob();
-      
+
       await navigator.clipboard.write([
         new ClipboardItem({
           [blob.type]: blob
@@ -4371,7 +4371,7 @@ ${JSON.stringify({
       showToast('請先選擇至少一張圖片！', 'info');
       return;
     }
-    
+
     setZipProgress('正在封裝壓縮檔...');
     try {
       const zip = new JSZip();
@@ -4401,7 +4401,7 @@ ${JSON.stringify({
       showToast('請先選擇至少一張圖片！', 'info');
       return;
     }
-    
+
     setShareStatus('sharing');
     try {
       const filesArray = [];
@@ -4451,7 +4451,7 @@ ${JSON.stringify({
       const response = await fetch(slice.url);
       const blob = await response.blob();
       const file = new File([blob], slice.name, { type: 'image/png' });
-      
+
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
@@ -4482,13 +4482,13 @@ ${JSON.stringify({
   // Render Toast Notifications
   const renderToast = () => {
     if (!toast.show) return null;
-    
+
     const colors = {
       success: 'border-emerald-500/30 bg-emerald-50/90 dark:bg-emerald-950/90 text-emerald-800 dark:text-emerald-300',
       error: 'border-rose-500/30 bg-rose-50/90 dark:bg-rose-950/90 text-rose-800 dark:text-rose-300',
       info: 'border-indigo-500/30 bg-indigo-50/90 dark:bg-indigo-950/90 text-indigo-800 dark:text-indigo-300',
     };
-    
+
     return (
       <div className={`fixed bottom-6 right-6 z-[100] max-w-sm p-4 rounded-xl border shadow-xl backdrop-blur-md transition-all duration-300 transform translate-y-0 ${colors[toast.type] || colors.info}`}>
         <div className="flex items-start gap-3">
@@ -4520,7 +4520,7 @@ ${JSON.stringify({
   // Helper variables for checkbox selection state
   const selectedCount = Object.values(selectedSlices).filter(Boolean).length;
   const allSelected = slices.length > 0 && Object.values(selectedSlices).every(Boolean);
-  
+
   const handleToggleSelectAll = () => {
     const nextVal = !allSelected;
     const newSelected = {};
@@ -4537,7 +4537,7 @@ ${JSON.stringify({
         const headings = ref.current.querySelectorAll('h1, h2, h3, h4, h5, h6');
         if (headings[index]) {
           headings[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
-          
+
           headings[index].classList.add('animate-change-highlight');
           setTimeout(() => {
             headings[index].classList.remove('animate-change-highlight');
@@ -4633,7 +4633,7 @@ ${JSON.stringify({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
-          
+
           {activePdfDropdown === 'mobile-pdf' && (
             <div className="absolute right-0 mt-8 w-60 max-w-[calc(100vw-24px)] max-h-[min(390px,calc(100dvh-200px))] overflow-y-auto overscroll-contain touch-pan-y rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xl z-50 p-1 flex flex-col gap-0.5 animate-fade-in scrollbar-thin">
               <button
@@ -4798,7 +4798,7 @@ ${JSON.stringify({
     } else if (paneType === 'reading') {
       const readingRef = side === 'left' ? leftReadingViewRef : (side === 'right' ? rightReadingViewRef : readingViewRef);
       return (
-        <div 
+        <div
           ref={elementRef}
           onScroll={(e) => {
             handleScroll(e);
@@ -4858,7 +4858,7 @@ ${JSON.stringify({
             onBlur={(e) => handleReadingBlur(e, side)}
             onDoubleClick={() => handleReadingDoubleClick(side)}
             suppressContentEditableWarning
-            style={{ 
+            style={{
               fontSize: `${previewFontSize}px`,
               '--mermaid-bg': getMermaidBgColor(),
               '--mermaid-border': mermaidBg === 'transparent' ? 'transparent' : (darkMode ? 'rgba(51, 65, 85, 0.5)' : 'rgba(226, 232, 240, 0.8)')
@@ -4944,11 +4944,10 @@ ${JSON.stringify({
         {isReading && (
           <button
             onClick={() => setShowReadingVoicePlayer(prev => !prev)}
-            className={`px-2 py-1 text-[11px] font-bold rounded-lg border transition-all flex items-center gap-1 ${
-              showReadingVoicePlayer
+            className={`px-2 py-1 text-[11px] font-bold rounded-lg border transition-all flex items-center gap-1 ${showReadingVoicePlayer
                 ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                 : 'text-indigo-600 dark:text-indigo-400 border-indigo-200/50 dark:border-indigo-900/50 hover:bg-indigo-50 dark:hover:bg-indigo-950/20'
-            }`}
+              }`}
             title="開啟/收合內建語音朗讀播放器 (可調速、進度保存續播)"
           >
             <span>🎙️</span>
@@ -4972,7 +4971,7 @@ ${JSON.stringify({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-            
+
             {activePdfDropdown === `${uniqueKey}-pdf` && (
               <div className="absolute right-0 mt-7 w-52 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xl z-20 p-1 flex flex-col gap-0.5 animate-fade-in max-h-[min(480px,80vh)] overflow-y-auto overscroll-contain touch-pan-y scrollbar-thin">
                 <button
@@ -5212,7 +5211,7 @@ ${JSON.stringify({
 
   return (
     <div className="flex flex-col h-screen lg:h-screen min-h-screen bg-slate-50 dark:bg-slate-950 font-sans transition-colors duration-200 overflow-visible lg:overflow-hidden">
-      
+
       {/* --- HEADER NAVBAR --- */}
       <header className={`sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 glass shadow-sm shrink-0 transition-all duration-300 transform ${showToolbars ? 'translate-y-0 opacity-100' : 'md:translate-y-0 md:opacity-100 -translate-y-full opacity-0 h-0 overflow-hidden pointer-events-none'}`}>
         <div className="max-w-[1600px] mx-auto px-4 py-3.5 flex flex-wrap gap-4 items-center justify-between">
@@ -5223,22 +5222,22 @@ ${JSON.stringify({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 dark:from-slate-100 dark:via-indigo-300 dark:to-slate-100 bg-clip-text text-transparent font-sans">
-                  萬能 Markdown 編輯轉換器
-                </h1>
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                  v1.2.0
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Vite + React + Tailwind CSS 三向同步系統</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 dark:from-slate-100 dark:via-indigo-300 dark:to-slate-100 bg-clip-text text-transparent font-sans">
+                MD瑞士刀
+              </h1>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                v1.2.0
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">三向同步系統</p>
           </div>
 
           {/* Quick Toolbar */}
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
             {/* Undo / Redo */}
             <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-900 p-0.5 border border-slate-200/60 dark:border-slate-800/60">
-              <button 
+              <button
                 onClick={handleUndo}
                 disabled={historyIndex <= 0}
                 className="p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent transition-all"
@@ -5249,7 +5248,7 @@ ${JSON.stringify({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
                 </svg>
               </button>
-              <button 
+              <button
                 onClick={handleRedo}
                 disabled={historyIndex >= history.length - 1}
                 className="p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent transition-all"
@@ -5264,7 +5263,7 @@ ${JSON.stringify({
 
             {/* Layout Toggle Segmented Control */}
             <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-900 p-0.5 border border-slate-200/60 dark:border-slate-800/60">
-              <button 
+              <button
                 onClick={() => setLayout('single')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${layout === 'single' ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-855'}`}
               >
@@ -5273,7 +5272,7 @@ ${JSON.stringify({
                 </svg>
                 單欄
               </button>
-              <button 
+              <button
                 onClick={() => setLayout('double')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${layout === 'double' ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-855'}`}
               >
@@ -5286,7 +5285,7 @@ ${JSON.stringify({
             </div>
 
             {/* Clear All Trigger */}
-            <button 
+            <button
               onClick={() => setShowConfirmClear(true)}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all border border-rose-200/40 dark:border-rose-950/40"
               title="清空所有內容"
@@ -5315,7 +5314,7 @@ ${JSON.stringify({
 
               {showIoMenu && (
                 <div className={`absolute ${ioMenuAlign === 'left' ? 'left-0' : 'right-0'} mt-2 w-72 max-w-[calc(100vw-24px)] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xl z-50 p-2 flex flex-col gap-1 animate-fade-in max-h-[80vh] overflow-y-auto`}>
-                  
+
                   {/* Section: 匯入 */}
                   <div className="px-2.5 py-1 text-[10px] font-extrabold tracking-wider uppercase text-slate-400 dark:text-slate-500 flex items-center justify-between">
                     <span>📥 匯入功能</span>
@@ -5495,7 +5494,7 @@ ${JSON.stringify({
             </div>
 
             {/* Dark Mode Switcher (單鍵白底/黑底切換) */}
-            <button 
+            <button
               onClick={() => setDarkMode(prev => !prev)}
               className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 border border-slate-200/60 dark:border-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-900 transition-all shrink-0 active:scale-95"
               title={darkMode ? '切換為白底淺色模式' : '切換為黑底深色模式'}
@@ -5521,11 +5520,10 @@ ${JSON.stringify({
             <div className="relative shrink-0" ref={historyMenuRef}>
               <button
                 onClick={toggleHistoryMenu}
-                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                  fileHistory.length === 0
+                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-semibold border transition-all ${fileHistory.length === 0
                     ? 'text-slate-400 dark:text-slate-600 border-slate-200/40 dark:border-slate-800/40 cursor-default opacity-50'
                     : 'text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 border-slate-200/60 dark:border-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-900'
-                }`}
+                  }`}
                 title={fileHistory.length === 0 ? '尚無歷史紀錄' : '瀏覽歷史閱讀紀錄'}
                 disabled={fileHistory.length === 0}
               >
@@ -5550,7 +5548,7 @@ ${JSON.stringify({
                     <button
                       onClick={() => {
                         setFileHistory([]);
-                        try { localStorage.removeItem('file-history'); } catch {}
+                        try { localStorage.removeItem('file-history'); } catch { }
                         setShowHistoryMenu(false);
                       }}
                       className="text-[10px] font-bold text-rose-500 dark:text-rose-400 hover:text-rose-600 transition-colors px-1.5 py-0.5 rounded hover:bg-rose-50 dark:hover:bg-rose-950/30"
@@ -5561,7 +5559,7 @@ ${JSON.stringify({
                   {fileHistory.map((entry) => {
                     const isActive = entry.markdown === markdown;
                     const dt = new Date(entry.timestamp);
-                    const timeStr = `${dt.getMonth() + 1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+                    const timeStr = `${dt.getMonth() + 1}/${dt.getDate()} ${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
                     return (
                       <button
                         key={entry.id}
@@ -5579,11 +5577,10 @@ ${JSON.stringify({
                           setShowHistoryMenu(false);
                           showToast(`📂 已載入：${entry.label}`, 'success');
                         }}
-                        className={`w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-xl transition-all group ${
-                          isActive
+                        className={`w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-xl transition-all group ${isActive
                             ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300'
                             : 'hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
-                        }`}
+                          }`}
                       >
                         <span className="mt-0.5 shrink-0">
                           <svg className={`w-3.5 h-3.5 ${isActive ? 'text-indigo-500' : 'text-slate-400 group-hover:text-slate-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -5609,7 +5606,7 @@ ${JSON.stringify({
 
       {/* --- MAIN WORKSPACE --- */}
       <main className={`flex-1 max-w-[1600px] w-full mx-auto flex flex-col min-h-0 overflow-y-auto lg:overflow-hidden animate-fade-in transition-all duration-300 ${showToolbars ? 'px-4 py-4 md:py-6' : 'md:px-4 md:py-4 lg:py-6 px-0 py-0'}`}>
-        
+
         {layout === 'single' ? (
           /* --- SINGLE COLUMN LAYOUT --- */
           <div className={`flex flex-col flex-1 transition-all duration-300 ${showToolbars ? 'h-[calc(100vh-200px)] md:h-[calc(100vh-220px)] lg:h-[calc(100vh-180px)] border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm' : 'h-[100vh] border-0 rounded-none bg-white dark:bg-slate-900'} overflow-hidden`}>
@@ -5658,7 +5655,7 @@ ${JSON.stringify({
                 {renderPanelUtilityButtons(singlePane, 'single-pane-util')}
               </div>
             </div>
-            
+
             {/* Workspace Area */}
             <div className="flex-1 min-h-0 relative overflow-hidden">
               {renderWorkspaceContent(singlePane, 'single')}
@@ -5667,13 +5664,13 @@ ${JSON.stringify({
         ) : (
           /* --- DOUBLE COLUMN CONTRAST LAYOUT --- */
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 min-h-0">
-            
+
             {/* Left Pane Card */}
             <div className={`flex flex-col transition-all duration-300 ${showToolbars ? 'h-[500px] md:h-[600px] lg:h-full border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 shadow-sm' : 'h-[50vh] border-0 rounded-none bg-white dark:bg-slate-900'} overflow-hidden`}>
               <div className={`relative z-20 px-4 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between shrink-0 transition-all duration-300 ${showToolbars ? 'translate-y-0 opacity-100 py-3 h-auto' : 'md:translate-y-0 md:opacity-100 md:py-3 md:h-auto -translate-y-4 opacity-0 h-0 py-0 overflow-hidden pointer-events-none'}`}>
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <span className="text-xs font-bold text-slate-400 tracking-wider uppercase">左欄</span>
-                  <select 
+                  <select
                     value={leftPane}
                     onChange={(e) => setLeftPane(e.target.value)}
                     className="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-850 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-slate-100"
@@ -5686,11 +5683,10 @@ ${JSON.stringify({
                   {/* Dual Pane Sync Scroll Toggle Button */}
                   <button
                     onClick={() => handleToggleSyncScroll(!syncScroll)}
-                    className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all active:scale-95 shadow-xs shrink-0 ${
-                      syncScroll 
-                        ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 ring-1 ring-indigo-500/20' 
+                    className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all active:scale-95 shadow-xs shrink-0 ${syncScroll
+                        ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 ring-1 ring-indigo-500/20'
                         : 'text-slate-500 dark:text-slate-400 border-slate-200/60 dark:border-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
+                      }`}
                     title={syncScroll ? '點擊關閉雙欄同步捲動' : '點擊開啟雙欄同步捲動'}
                   >
                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
@@ -5731,7 +5727,7 @@ ${JSON.stringify({
               <div className={`relative z-20 px-4 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap gap-3 items-center justify-between shrink-0 transition-all duration-300 ${showToolbars ? 'translate-y-0 opacity-100 py-3 h-auto' : 'md:translate-y-0 md:opacity-100 md:py-3 md:h-auto -translate-y-4 opacity-0 h-0 py-0 overflow-hidden pointer-events-none'}`}>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-400 tracking-wider uppercase">右欄</span>
-                  <select 
+                  <select
                     value={rightPane}
                     onChange={(e) => setRightPane(e.target.value)}
                     className="px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-slate-850 border border-slate-200/80 dark:border-slate-850 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-slate-100"
@@ -5803,31 +5799,28 @@ ${JSON.stringify({
             <div className="flex border-b border-slate-200/70 dark:border-slate-800/80 px-5 bg-slate-50/30 dark:bg-slate-900/30 overflow-x-auto">
               <button
                 onClick={() => setSettingsTab('settings')}
-                className={`py-2.5 px-3 sm:px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${
-                  settingsTab === 'settings'
+                className={`py-2.5 px-3 sm:px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${settingsTab === 'settings'
                     ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                     : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                }`}
+                  }`}
               >
                 <span>⚙️ 功能偏好設定</span>
               </button>
               <button
                 onClick={() => setSettingsTab('ai')}
-                className={`py-2.5 px-3 sm:px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${
-                  settingsTab === 'ai'
+                className={`py-2.5 px-3 sm:px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${settingsTab === 'ai'
                     ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                     : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                }`}
+                  }`}
               >
                 <span>🤖 AI 模型 API 設定</span>
               </button>
               <button
                 onClick={() => setSettingsTab('tutorial')}
-                className={`py-2.5 px-3 sm:px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${
-                  settingsTab === 'tutorial'
+                className={`py-2.5 px-3 sm:px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${settingsTab === 'tutorial'
                     ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                     : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                }`}
+                  }`}
               >
                 <span>📖 新手使用教學</span>
               </button>
@@ -5942,11 +5935,10 @@ ${JSON.stringify({
                       <button
                         type="button"
                         onClick={() => handleSettingsProviderChange('cloudflare')}
-                        className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex flex-col items-center justify-center gap-0.5 ${
-                          settingsProvider === 'cloudflare'
+                        className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex flex-col items-center justify-center gap-0.5 ${settingsProvider === 'cloudflare'
                             ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
                             : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-1.5">
                           <span>☁️ Cloudflare KV</span>
@@ -5961,11 +5953,10 @@ ${JSON.stringify({
                       <button
                         type="button"
                         onClick={() => handleSettingsProviderChange('github')}
-                        className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex flex-col items-center justify-center gap-0.5 ${
-                          settingsProvider === 'github'
+                        className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex flex-col items-center justify-center gap-0.5 ${settingsProvider === 'github'
                             ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
                             : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-1.5">
                           <span>🐙 GitHub Pages</span>
@@ -6216,11 +6207,10 @@ ${JSON.stringify({
                               handleAiSettingsChange(newCfg);
                               setAiConnectionResult(null);
                             }}
-                            className={`p-2 rounded-lg text-xs font-bold transition-all flex flex-col gap-0.5 ${
-                              isSelected
+                            className={`p-2 rounded-lg text-xs font-bold transition-all flex flex-col gap-0.5 ${isSelected
                                 ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-indigo-500/30'
                                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                            }`}
+                              }`}
                           >
                             <div className="flex items-center justify-between w-full">
                               <span className="truncate">{p.name.split(' ')[0]}</span>
@@ -6434,11 +6424,10 @@ ${JSON.stringify({
                                     key={mId}
                                     type="button"
                                     onClick={() => handleAiSettingsChange({ ...aiSettings, model: mId })}
-                                    className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded border transition-all flex items-center gap-1 ${
-                                      aiSettings.model === mId
+                                    className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded border transition-all flex items-center gap-1 ${aiSettings.model === mId
                                         ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 border-indigo-400 dark:border-indigo-700 shadow-2xs'
                                         : 'bg-white dark:bg-slate-850 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                    }`}
+                                      }`}
                                     title={item.name || mId}
                                   >
                                     <span>{mId}</span>
@@ -6465,22 +6454,20 @@ ${JSON.stringify({
                                     key={item.id}
                                     type="button"
                                     onClick={() => handleAiSettingsChange({ ...aiSettings, model: item.id })}
-                                    className={`px-2 py-1 text-[10px] font-mono font-bold rounded border transition-all flex items-center gap-1.5 ${
-                                      aiSettings.model === item.id
+                                    className={`px-2 py-1 text-[10px] font-mono font-bold rounded border transition-all flex items-center gap-1.5 ${aiSettings.model === item.id
                                         ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-400 dark:border-emerald-700 shadow-2xs'
                                         : 'bg-white dark:bg-slate-850 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                    }`}
+                                      }`}
                                     title={`${item.name || item.id} · ${item.isUnlimited ? 'Unlimited' : (item.rpd ?? 0).toLocaleString()} RPD (每日免費請求上限) · ${item.isUnlimited ? 'Unlimited' : (item.rpm ?? 0)} RPM`}
                                   >
                                     <span>{item.id}</span>
-                                    <span className={`text-[9px] px-1 py-0.2 rounded font-sans font-bold ${
-                                      aiSettings.model === item.id
+                                    <span className={`text-[9px] px-1 py-0.2 rounded font-sans font-bold ${aiSettings.model === item.id
                                         ? 'bg-emerald-200/80 dark:bg-emerald-800/80 text-emerald-900 dark:text-emerald-100'
                                         : (item.rpd >= 10000 ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200' :
-                                           item.rpd >= 500 ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300' :
-                                           item.rpd > 0 ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300' :
-                                           'bg-rose-100/80 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400')
-                                    }`}>
+                                          item.rpd >= 500 ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300' :
+                                            item.rpd > 0 ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300' :
+                                              'bg-rose-100/80 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400')
+                                      }`}>
                                       {item.isUnlimited ? 'Unlimited RPD' : `${(item.rpd ?? 0).toLocaleString()} RPD`}
                                     </span>
                                   </button>
@@ -6497,11 +6484,10 @@ ${JSON.stringify({
                                 key={m}
                                 type="button"
                                 onClick={() => handleAiSettingsChange({ ...aiSettings, model: m })}
-                                className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded border transition-all ${
-                                  aiSettings.model === m
+                                className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded border transition-all ${aiSettings.model === m
                                     ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 border-indigo-400 dark:border-indigo-700'
                                     : 'bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
-                                }`}
+                                  }`}
                               >
                                 {m}
                               </button>
@@ -6569,9 +6555,8 @@ ${JSON.stringify({
                         </button>
 
                         {aiConnectionResult && (
-                          <div className={`text-[11px] font-bold flex items-center gap-1 ${
-                            aiConnectionResult.success ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
-                          }`}>
+                          <div className={`text-[11px] font-bold flex items-center gap-1 ${aiConnectionResult.success ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                            }`}>
                             <span>{aiConnectionResult.success ? '✅' : '❌'}</span>
                             <span>{aiConnectionResult.msg}</span>
                           </div>
@@ -6708,7 +6693,7 @@ ${JSON.stringify({
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">
-              <button 
+              <button
                 onClick={() => {
                   setShowFilenameModal(false);
                   setPendingHtmlAction(null);
@@ -6717,7 +6702,7 @@ ${JSON.stringify({
               >
                 取消
               </button>
-              <button 
+              <button
                 onClick={proceedExportHTML}
                 className="px-4.5 py-2 text-sm font-bold text-white bg-gradient-to-r from-indigo-500 to-purple-650 hover:from-indigo-600 hover:to-purple-750 rounded-xl shadow-md shadow-indigo-500/10 active:scale-95 transition-all"
               >
@@ -6746,13 +6731,13 @@ ${JSON.stringify({
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">
-              <button 
+              <button
                 onClick={() => setShowConfirmClear(false)}
                 className="px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
               >
                 取消
               </button>
-              <button 
+              <button
                 onClick={handleClearAll}
                 className="px-4.5 py-2 text-sm font-bold text-white bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-750 rounded-xl shadow-md shadow-rose-500/10 active:scale-95 transition-all"
               >
@@ -6767,7 +6752,7 @@ ${JSON.stringify({
       {showExportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto transition-all animate-fade-in">
           <div className="w-full max-w-5xl my-4 md:my-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col md:flex-row max-h-[90vh] md:max-h-[85vh] overflow-y-auto md:overflow-hidden">
-            
+
             {/* Modal Configurations Pane (Left) */}
             <div className="w-full md:w-[350px] p-6 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-850 flex flex-col justify-between overflow-visible md:overflow-y-auto bg-slate-50/50 dark:bg-slate-900/30 shrink-0">
               <div className="space-y-6">
@@ -6830,7 +6815,7 @@ ${JSON.stringify({
                       <span>均分張數:</span>
                       <strong className="text-indigo-500 font-bold">{numParts} 張</strong>
                     </label>
-                    <input 
+                    <input
                       type="range"
                       min="2"
                       max="10"
@@ -6848,7 +6833,7 @@ ${JSON.stringify({
                       <span>每張高度 (px):</span>
                       <strong className="text-indigo-500 font-bold">{fixedHeight} px</strong>
                     </label>
-                    <input 
+                    <input
                       type="number"
                       min="400"
                       max="3000"
@@ -6900,7 +6885,7 @@ ${JSON.stringify({
 
             {/* Modal Preview Canvas & Downloads Grid (Right) */}
             <div className="flex-1 p-6 flex flex-col justify-between overflow-visible md:overflow-hidden bg-slate-100 dark:bg-slate-955">
-              
+
               <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-900 pb-3 flex-wrap gap-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">切片結果預覽 ({slices.length} 張圖)</span>
@@ -6913,7 +6898,7 @@ ${JSON.stringify({
                     </button>
                   )}
                 </div>
-                
+
                 {slices.length > 0 && (
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Share SELECTED slices via Web Share API */}
@@ -6923,9 +6908,9 @@ ${JSON.stringify({
                       className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-500 hover:bg-indigo-600 shadow-md shadow-indigo-500/10 active:scale-95 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500 transition-all"
                     >
                       {shareStatus === 'sharing' ? '傳送中...' :
-                       shareStatus === 'success' ? '分享成功!' :
-                       shareStatus === 'error' ? '分享失敗' :
-                       shareStatus === 'unsupported' ? '不支援分享' : `選取分享 (${selectedCount})`}
+                        shareStatus === 'success' ? '分享成功!' :
+                          shareStatus === 'error' ? '分享失敗' :
+                            shareStatus === 'unsupported' ? '不支援分享' : `選取分享 (${selectedCount})`}
                     </button>
                     {/* ZIP download button of SELECTED slices */}
                     <button
@@ -6963,8 +6948,8 @@ ${JSON.stringify({
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {slices.map((slice, i) => (
-                      <div 
-                        key={i} 
+                      <div
+                        key={i}
                         className={`flex flex-col border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all relative ${selectedSlices[i] ? 'border-indigo-500 bg-white dark:bg-slate-900 ring-2 ring-indigo-500/15' : 'border-slate-250 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-900/60 opacity-60'}`}
                       >
                         {/* Checkbox overlay button (top left corner) */}
@@ -6981,10 +6966,10 @@ ${JSON.stringify({
 
                         {/* Image Preview Container */}
                         <div className="flex-1 bg-slate-200 dark:bg-slate-955/80 p-2 flex items-center justify-center min-h-[160px] max-h-[200px] overflow-hidden relative group">
-                          <img 
-                            src={slice.url} 
-                            alt={slice.name} 
-                            className="max-w-full max-h-full object-contain rounded-md shadow-sm border border-slate-200/20" 
+                          <img
+                            src={slice.url}
+                            alt={slice.name}
+                            className="max-w-full max-h-full object-contain rounded-md shadow-sm border border-slate-200/20"
                           />
                           {/* Desktop hover menu overlay */}
                           <div className="absolute inset-0 bg-slate-900/60 opacity-0 lg:group-hover:opacity-100 transition-opacity flex flex-col gap-2 items-center justify-center">
@@ -7016,24 +7001,24 @@ ${JSON.stringify({
                             <span className="font-bold text-slate-500 dark:text-slate-400 truncate max-w-[65%]">{slice.name}</span>
                             <span className="text-slate-400 font-mono">{Math.round(slice.width)} x {Math.round(slice.height)} px</span>
                           </div>
-                          
+
                           {/* Mobile Actions (Visible on screens < lg) */}
                           <div className="flex items-center gap-1.5 mt-1 lg:hidden">
-                            <a 
-                              href={slice.url} 
-                              download={slice.name} 
+                            <a
+                              href={slice.url}
+                              download={slice.name}
                               className="flex-1 text-center py-1.5 rounded-lg bg-indigo-500 text-white font-bold text-[10px] shadow-sm active:scale-95"
                             >
                               下載
                             </a>
-                            <button 
-                              onClick={() => handleCopySliceImage(slice)} 
+                            <button
+                              onClick={() => handleCopySliceImage(slice)}
                               className="flex-1 py-1.5 rounded-lg bg-emerald-500 text-white font-bold text-[10px] shadow-sm active:scale-95"
                             >
                               複製
                             </button>
-                            <button 
-                              onClick={() => handleShareSingle(slice)} 
+                            <button
+                              onClick={() => handleShareSingle(slice)}
                               className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-[10px] shadow-sm active:scale-95"
                             >
                               分享
@@ -7111,13 +7096,13 @@ ${JSON.stringify({
 
       {/* --- HIDDEN CANVAS OFFSCREEN RENDERING CONTAINER --- */}
       <div className="absolute left-[-9999px] top-[-9999px] pointer-events-none" aria-hidden="true">
-        <div 
-          id="export-capture-area" 
+        <div
+          id="export-capture-area"
           className={`w-[800px] p-12 transition-colors duration-100 ${exportTheme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-955 text-slate-100 dark'}`}
         >
-          <div 
+          <div
             className="preview-prose"
-            dangerouslySetInnerHTML={{ __html: resolveImageSources(readingHtml, imageMap) }} 
+            dangerouslySetInnerHTML={{ __html: resolveImageSources(readingHtml, imageMap) }}
           />
         </div>
       </div>
