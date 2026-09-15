@@ -3,6 +3,8 @@ import { buildPublishableHTML } from '../utils/crypto';
 import {
   getSavedWorkerUrl,
   saveWorkerUrl,
+  getSavedWorkerAdminToken,
+  saveWorkerAdminToken,
   getSavedGitHubConfig,
   saveGitHubConfig,
   getActiveProvider,
@@ -214,6 +216,7 @@ function PublishModalContent({
 
   // Cloudflare KV Config
   const [workerUrl, setWorkerUrlState] = useState(() => getSavedWorkerUrl());
+  const [workerAdminToken, setWorkerAdminTokenState] = useState(() => getSavedWorkerAdminToken());
   const [showCfConfig, setShowCfConfig] = useState(() => !getSavedWorkerUrl());
 
   // GitHub Pages Config
@@ -317,6 +320,7 @@ function PublishModalContent({
 
       if (provider === 'cloudflare') {
         saveWorkerUrl(workerUrl.trim());
+        saveWorkerAdminToken(workerAdminToken);
         result = await uploadToWorker(workerUrl.trim(), {
           html: fullHtml,
           title: effectiveTitle,
@@ -615,6 +619,20 @@ function PublishModalContent({
                         placeholder="https://your-worker.workers.dev"
                         className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
                       />
+
+                      <div className="pt-1.5 space-y-1">
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                          <span>管理金鑰 Admin Token（選填）</span>
+                          <span className="text-[10px] text-slate-400 font-normal">若 Worker 設有 ADMIN_TOKEN 則需填寫</span>
+                        </label>
+                        <input
+                          type="password"
+                          value={workerAdminToken}
+                          onChange={(e) => setWorkerAdminTokenState(e.target.value)}
+                          placeholder="若 Worker 設定了 ADMIN_TOKEN 請輸入..."
+                          className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
                       {workerUrl.toLowerCase().includes('github.io') && (
                         <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-200 text-[11px] space-y-1.5 animate-fade-in">
                           <div className="font-bold flex items-center gap-1.5">

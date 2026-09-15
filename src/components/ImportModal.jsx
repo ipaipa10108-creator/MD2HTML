@@ -4,6 +4,15 @@ import {
   parseHtmlToMarkdown,
   parsePdfToMarkdown
 } from '../utils/importer';
+import {
+  getPublishHistory,
+  syncRemoteShares,
+  mergeRemoteSharesIntoHistory,
+  getActiveProvider,
+  getSavedWorkerUrl,
+  getSavedGitHubConfig
+} from '../utils/publishService';
+import { resolveHistoryItemInfo } from './PublishHistoryModal';
 
 export default function ImportModal({
   isOpen,
@@ -22,10 +31,48 @@ export default function ImportModal({
 }
 
 function ImportModalContent({ onClose, onApplyImport, showToast }) {
-  const [activeTab, setActiveTab] = useState('url'); // 'url' | 'file'
+  const [activeTab, setActiveTab] = useState('url'); // 'url' | 'file' | 'cloud'
   const [urlInput, setUrlInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('');
+
+  // Cloud shares state
+  const [cloudShares, setCloudShares] = useState(() => getPublishHistory());
+  const [cloudSearch, setCloudSearch] = useState('');
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+
+  const activeProvider = getActiveProvider();
+  const workerUrl = getSavedWorkerUrl();
+  const ghConfig = getSavedGitHubConfig();
+
+  const handleSyncCloudInModal = async () => {
+    setIsCloudSyncing(true);
+    const providerName = activeProvider === 'github' ? 'GitHub 倉庫' : 'Cloudflare Workers KV';
+    showToast?.(`⏳ 正在同步 ${providerName} 的雲端已發布清單...`, 'info');
+    try {
+      const { items } = await syncRemoteShares({ provider: activeProvider });
+      mergeRemoteSharesIntoHistory(items);
+      setCloudShares(getPublishHistory());
+      showToast?.(`🎉 成功同步！在雲端發現 ${items.length} 筆檔案`, 'success');
+    } catch (err) {
+      showToast?.(`⚠️ 同步失敗：${err.message}`, 'error');
+    } finally {
+      setIsCloudSyncing(false);
+    }
+  };
+
+  const filteredCloudShares = cloudShares.filter(item => {
+    if (!cloudSearch.trim()) return true;
+    const q = cloudSearch.toLowerCase();
+    const { title, subtitle } = resolveHistoryItemInfo(item);
+    return (
+      (item.title && item.title.toLowerCase().includes(q)) ||
+      (title && title.toLowerCase().includes(q)) ||
+      (subtitle && subtitle.toLowerCase().includes(q)) ||
+      (item.url && item.url.toLowerCase().includes(q)) ||
+      (item.provider && item.provider.toLowerCase().includes(q))
+    );
+  });
 
   // Password-protected encrypted page state
   const [needsPassword, setNeedsPassword] = useState(false);
@@ -280,6 +327,20 @@ function ImportModalContent({ onClose, onApplyImport, showToast }) {
           >
             <span>📑 PDF / 本機檔案匯入</span>
           </button>
+          <button
+            onClick={() => {
+              setActiveTab('cloud');
+              setParsedResult(null);
+              setNeedsPassword(false);
+            }}
+            className={`flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold border-b-2 transition-all ${
+              activeTab === 'cloud'
+                ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+            }`}
+          >
+            <span>☁️ 雲端分享庫</span>
+          </button>
         </div>
 
         {/* Modal Body */}
@@ -453,6 +514,104 @@ function ImportModalContent({ onClose, onApplyImport, showToast }) {
               <div className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
                 <span className="font-bold text-slate-700 dark:text-slate-300">💡 提示：</span>
                 由本系統匯出的文字 PDF 或 HTML 具有專屬中繼資料，可達成 100% 絕對無損還原。外部製作或傳統 PDF 亦可透過智慧文字層辨識自動重構 Markdown 章節與標題。
+              </div>
+            </div>
+          )}
+
+          {/* Tab 3: Cloud Shared Library (Cloudflare / GitHub) */}
+          {activeTab === 'cloud' && !isLoading && !parsedResult && !needsPassword && (
+            <div className="space-y-4">
+              {/* Endpoint Banner & Sync Button */}
+              <div className="p-3.5 rounded-xl border border-indigo-200/80 dark:border-indigo-900/80 bg-indigo-50/50 dark:bg-indigo-950/30 flex flex-wrap items-center justify-between gap-2.5">
+                <div className="space-y-0.5">
+                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <span>{activeProvider === 'github' ? '🐙 GitHub Pages 倉庫' : '☁️ Cloudflare Workers KV'}</span>
+                  </div>
+                  <div className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400 truncate max-w-sm sm:max-w-md">
+                    {activeProvider === 'github'
+                      ? (ghConfig.owner ? `${ghConfig.owner}/${ghConfig.repo || 'html-shares'}` : '尚未設定 GitHub 帳號')
+                      : (workerUrl || '尚未設定 Cloudflare Worker 網址')}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSyncCloudInModal}
+                  disabled={isCloudSyncing}
+                  className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+                  title="從已設定的雲端抓取最新檔案清單"
+                >
+                  <span className={isCloudSyncing ? 'animate-spin' : ''}>🔄</span>
+                  <span>{isCloudSyncing ? '同步中...' : '同步雲端清單'}</span>
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={cloudSearch}
+                  onChange={(e) => setCloudSearch(e.target.value)}
+                  placeholder="搜尋雲端已發布檔案..."
+                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
+              </div>
+
+              {/* Items List */}
+              <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                {filteredCloudShares.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-slate-400 space-y-2">
+                    <div className="text-2xl">📭</div>
+                    <div>{cloudSearch ? '找不到符合搜尋的檔案' : '目前尚無已同步的雲端分享檔案'}</div>
+                    <p className="text-[11px]">點擊上方「🔄 同步雲端清單」從設定的空間抓取已發布的文件</p>
+                  </div>
+                ) : (
+                  filteredCloudShares.map(item => {
+                    const { title: displayTitle, subtitle: displaySubtitle } = resolveHistoryItemInfo(item);
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-800/70 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all flex items-center justify-between gap-3"
+                      >
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
+                              item.provider === 'github'
+                                ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300'
+                                : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
+                            }`}>
+                              {item.provider === 'github' ? '🐙 GitHub' : '☁️ CF KV'}
+                            </span>
+                            {item.isEncrypted && (
+                              <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">🔒 密碼保護</span>
+                            )}
+                            <h4 className="font-bold text-xs text-slate-800 dark:text-slate-100 truncate">
+                              {displayTitle}
+                            </h4>
+                          </div>
+                          {displaySubtitle && (
+                            <p className="text-[11px] text-slate-400 truncate">
+                              {displaySubtitle}
+                            </p>
+                          )}
+                          <div className="text-[10px] font-mono text-slate-400 truncate">
+                            {item.url}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleFetchUrl(item.url)}
+                          className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-600 hover:text-white text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-lg border border-indigo-200 dark:border-indigo-800 transition-all shrink-0 flex items-center gap-1"
+                        >
+                          <span>✏️</span>
+                          <span>載入此文件</span>
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}

@@ -7,6 +7,7 @@
 import { bufferToBase64 } from './crypto';
 
 const STORAGE_KEY_WORKER_URL = 'md2html_worker_url';
+const STORAGE_KEY_WORKER_ADMIN_TOKEN = 'md2html_worker_admin_token';
 const STORAGE_KEY_GITHUB_TOKEN = 'md2html_github_token';
 const STORAGE_KEY_GITHUB_OWNER = 'md2html_github_owner';
 const STORAGE_KEY_GITHUB_REPO = 'md2html_github_repo';
@@ -32,6 +33,18 @@ export function saveWorkerUrl(url) {
     localStorage.removeItem(STORAGE_KEY_WORKER_URL);
   } else {
     localStorage.setItem(STORAGE_KEY_WORKER_URL, cleanWorkerUrl(url));
+  }
+}
+
+export function getSavedWorkerAdminToken() {
+  return localStorage.getItem(STORAGE_KEY_WORKER_ADMIN_TOKEN) || '';
+}
+
+export function saveWorkerAdminToken(token) {
+  if (!token || !token.trim()) {
+    localStorage.removeItem(STORAGE_KEY_WORKER_ADMIN_TOKEN);
+  } else {
+    localStorage.setItem(STORAGE_KEY_WORKER_ADMIN_TOKEN, token.trim());
   }
 }
 
@@ -119,10 +132,11 @@ export async function uploadToWorker(workerUrl, { html, title, description, isEn
 export async function deleteFromWorker(workerUrl, id, secret) {
   const baseUrl = cleanWorkerUrl(workerUrl);
   const endpoint = `${baseUrl}/api/${id}`;
+  const effectiveSecret = (secret || getSavedWorkerAdminToken()).trim();
 
   const res = await fetch(endpoint, {
     method: 'DELETE',
-    headers: { 'Authorization': `Bearer ${secret}` }
+    headers: { 'Authorization': `Bearer ${effectiveSecret}` }
   });
 
   if (!res.ok) {
@@ -131,6 +145,47 @@ export async function deleteFromWorker(workerUrl, id, secret) {
   }
 
   return await res.json();
+}
+
+export async function fetchWorkerShares(workerUrl, adminToken = '') {
+  const baseUrl = cleanWorkerUrl(workerUrl);
+  if (!baseUrl) {
+    throw new Error('未設定 Cloudflare Worker 網址！');
+  }
+
+  const token = (adminToken || getSavedWorkerAdminToken()).trim();
+  const headers = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const endpoint = `${baseUrl}/api/list`;
+  const res = await fetch(endpoint, {
+    method: 'GET',
+    headers
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    if (res.status === 401 || res.status === 403) {
+      throw new Error('Cloudflare Worker 需要管理金鑰 (Admin Token) 才能讀取清單！請至發布設定填入金鑰。');
+    }
+    throw new Error(errData.error || `讀取 Cloudflare 清單失敗 (HTTP ${res.status})`);
+  }
+
+  const data = await res.json();
+  const rawList = Array.isArray(data.list) ? data.list : [];
+  return rawList.map(item => ({
+    id: item.id,
+    url: item.url || `${baseUrl}/${item.id}`,
+    title: item.title || `線上分享 (${item.id})`,
+    description: item.description || '',
+    isEncrypted: Boolean(item.isEncrypted),
+    createdAt: item.createdAt || '',
+    secret: item.secret || '',
+    provider: 'cloudflare',
+    isSynced: true
+  }));
 }
 
 // --- Provider 2: GitHub REST API + GitHub Pages ---
@@ -246,6 +301,145 @@ export async function deleteFromGitHub({ token, owner, repo, path, sha }) {
   }
 
   return { success: true, message: '文件已成功從 GitHub 刪除下架！' };
+}
+
+export async function fetchGitHubShares({ token, owner, repo }) {
+  const cleanOwner = (owner || '').trim();
+  const cleanRepo = (repo || '').trim() || 'html-shares';
+  const cleanToken = (token || '').trim();
+
+  if (!cleanOwner) {
+    throw new Error('缺少 GitHub 帳號名稱 (Owner)！請至發布設定填寫。');
+  }
+
+  const endpoint = `https://api.github.com/repos/${cleanOwner}/${cleanRepo}/contents/`;
+  const headers = {
+    'Accept': 'application/vnd.github.v3+json'
+  };
+  if (cleanToken) {
+    headers['Authorization'] = `Bearer ${cleanToken}`;
+  }
+
+  const res = await fetch(endpoint, {
+    method: 'GET',
+    headers
+  });
+
+  if (!res.ok) {
+    if (res.status === 404) {
+      throw new Error(`找不到 GitHub 倉庫 "${cleanOwner}/${cleanRepo}"，請確認倉庫名稱或是否為公開 (Public) 倉庫！`);
+    }
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.message || `讀取 GitHub 倉庫檔案失敗 (HTTP ${res.status})`);
+  }
+
+  const files = await res.json();
+  if (!Array.isArray(files)) {
+    return [];
+  }
+
+  // Filter only .html files
+  const htmlFiles = files.filter(f => f.type === 'file' && f.name.toLowerCase().endsWith('.html'));
+
+  // Retrieve local history map to preserve rich titles and metadata if already known
+  const localHistory = getPublishHistory();
+  const localMap = new Map();
+  localHistory.forEach(h => {
+    if (h && h.id) localMap.set(h.id, h);
+  });
+
+  return htmlFiles.map(f => {
+    const id = f.name.replace(/\.html$/i, '');
+    const existing = localMap.get(id);
+    const shareUrl = `https://${cleanOwner.toLowerCase()}.github.io/${cleanRepo}/${f.name}`;
+
+    return {
+      id,
+      url: shareUrl,
+      title: existing?.title || `GitHub 分享 (${id})`,
+      description: existing?.description || '',
+      isEncrypted: Boolean(existing?.isEncrypted),
+      createdAt: existing?.createdAt || '',
+      path: f.path || f.name,
+      sha: f.sha,
+      size: f.size,
+      provider: 'github',
+      owner: cleanOwner,
+      repo: cleanRepo,
+      password: existing?.password || '',
+      isSynced: true
+    };
+  });
+}
+
+// Unified Remote Shares Synchronization
+export async function syncRemoteShares(options = {}) {
+  const activeProv = options.provider || getActiveProvider();
+  if (activeProv === 'cloudflare') {
+    const url = options.workerUrl || getSavedWorkerUrl();
+    const adminToken = options.adminToken !== undefined ? options.adminToken : getSavedWorkerAdminToken();
+    if (!url) {
+      throw new Error('尚未設定 Cloudflare Worker 網址，請先至發布設定填寫！');
+    }
+    const items = await fetchWorkerShares(url, adminToken);
+    return { provider: 'cloudflare', items };
+  } else {
+    const gh = options.githubConfig || getSavedGitHubConfig();
+    if (!gh.owner) {
+      throw new Error('尚未設定 GitHub 帳號資訊，請先至發布設定填寫！');
+    }
+    const items = await fetchGitHubShares(gh);
+    return { provider: 'github', items };
+  }
+}
+
+// Merge remote items with local history
+export function mergeRemoteSharesIntoHistory(remoteItems) {
+  if (!Array.isArray(remoteItems) || remoteItems.length === 0) {
+    const current = getPublishHistory();
+    return { history: current, newCount: 0, totalCount: current.length };
+  }
+
+  const current = getPublishHistory();
+  const map = new Map();
+  current.forEach(item => {
+    if (item && item.id) map.set(item.id, item);
+  });
+
+  let newCount = 0;
+  remoteItems.forEach(remote => {
+    if (!remote || !remote.id) return;
+    if (map.has(remote.id)) {
+      const local = map.get(remote.id);
+      map.set(remote.id, {
+        ...local,
+        ...remote,
+        title: (local.title && !local.title.startsWith('GitHub 分享 (')) ? local.title : remote.title,
+        description: local.description || remote.description || '',
+        password: local.password || remote.password || '',
+        bookmarks: local.bookmarks || remote.bookmarks || '',
+        createdAt: local.createdAt || remote.createdAt || new Date().toISOString(),
+        isSynced: true
+      });
+    } else {
+      map.set(remote.id, {
+        ...remote,
+        createdAt: remote.createdAt || new Date().toISOString(),
+        isSynced: true
+      });
+      newCount++;
+    }
+  });
+
+  const merged = Array.from(map.values());
+  merged.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(merged));
+
+  return {
+    history: merged,
+    newCount,
+    totalCount: merged.length
+  };
 }
 
 // --- Local Publish History Management ---

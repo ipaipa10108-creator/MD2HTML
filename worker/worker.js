@@ -96,7 +96,51 @@ export default {
         });
       }
 
-      // 2. DELETE /api/:id: Delete file with Secret Token
+      // 2. GET /api/list: List all published documents from Workers KV (Supports multi-device sync & management)
+      if (request.method === 'GET' && pathname === '/api/list') {
+        if (!env.MY_KV || typeof env.MY_KV.list !== 'function') {
+          return jsonResponse({ error: 'Workers KV 未正確綁定 (MY_KV)' }, 500);
+        }
+
+        // Optional Admin Token verification if ADMIN_TOKEN is set in Worker environment
+        if (env.ADMIN_TOKEN) {
+          const authHeader = request.headers.get('Authorization') || '';
+          const tokenMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+          const providedToken = tokenMatch ? tokenMatch[1].trim() : (url.searchParams.get('token') || '').trim();
+
+          if (providedToken !== env.ADMIN_TOKEN) {
+            return jsonResponse({ error: '驗證失敗：管理金鑰不符 (Unauthorized: Invalid Admin Token)' }, 401);
+          }
+        }
+
+        const cursor = url.searchParams.get('cursor') || undefined;
+        const listResult = await env.MY_KV.list({ limit: 1000, cursor });
+
+        const items = (listResult.keys || []).map(k => {
+          const meta = k.metadata || {};
+          return {
+            id: k.name,
+            url: `${url.origin}/${k.name}`,
+            title: meta.title || '未命名主題分享',
+            isEncrypted: Boolean(meta.isEncrypted),
+            createdAt: meta.createdAt || '',
+            secret: meta.secret || '',
+            provider: 'cloudflare'
+          };
+        });
+
+        items.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+        return jsonResponse({
+          success: true,
+          count: items.length,
+          list: items,
+          list_complete: listResult.list_complete,
+          cursor: listResult.cursor || null
+        });
+      }
+
+      // 3. DELETE /api/:id: Delete file with Secret Token or Admin Token
       if (request.method === 'DELETE' && pathname.startsWith('/api/')) {
         if (!env.MY_KV || typeof env.MY_KV.delete !== 'function') {
           return jsonResponse({ error: 'Workers KV 未正確綁定 (MY_KV)' }, 500);
@@ -109,7 +153,7 @@ export default {
 
         const authHeader = request.headers.get('Authorization') || '';
         const tokenMatch = authHeader.match(/^Bearer\s+(.+)$/i);
-        const providedSecret = tokenMatch ? tokenMatch[1].trim() : '';
+        const providedSecret = tokenMatch ? tokenMatch[1].trim() : (url.searchParams.get('token') || '').trim();
 
         if (!providedSecret) {
           return jsonResponse({ error: '缺少授權金鑰 (Authorization Bearer Token)' }, 401);
@@ -120,7 +164,10 @@ export default {
           return jsonResponse({ error: '找不到該文件，可能已被刪除或不存在' }, 404);
         }
 
-        if (metadata.secret !== providedSecret) {
+        const isSecretMatch = metadata.secret === providedSecret;
+        const isAdminMatch = Boolean(env.ADMIN_TOKEN && env.ADMIN_TOKEN === providedSecret);
+
+        if (!isSecretMatch && !isAdminMatch) {
           return jsonResponse({ error: '驗證失敗：管理金鑰不符，無權刪除' }, 403);
         }
 

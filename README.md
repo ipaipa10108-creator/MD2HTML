@@ -125,7 +125,7 @@
           - **進度保存下次續播**：自動以文件特徵儲存閱讀進度至本地，下次開啟時自動顯示續播提示，點擊即可從上次中斷段落繼續收聽！
           - 不僅在 AI 美化彈窗可即時收聽故事稿，在「美化閱讀排版」工具列亦可一鍵開啟/收合朗讀控制面板。
 
-14. **🌐 線上發布與分享（雙方案自由切換 ＋ 零知識端對端加密 ＋ 發布歷史備份）**
+14. **🌐 線上發布與分享（雙方案自由切換 ＋ 零知識端對端加密 ＋ 跨裝置雲端同步 ＋ 一鍵匯入編輯 ＋ 遠端下架硬刪除）**
     - **雙平台自由選擇（100% 免費、完全免綁信用卡）**：
       - ☁️ **Cloudflare Workers KV 方案**：極速邊緣運算，隨機短網址（8 碼），隱私度高、秒級發布生效。
       - 🐙 **GitHub REST API + GitHub Pages 方案**：純前端直連，免架設任何後端伺服器，自動推送到公開倉庫發布。
@@ -137,15 +137,20 @@
     - **全方位分享與動態 QR Code**：
       - 自動產生專屬短網址，支援呼叫系統原生分享 (Web Share API) 一鍵轉發至 LINE 或任何行動 App，亦可一鍵複製連結。
       - 動態即時繪製高解析度 QR Code，方便手機掃描即刻閱讀。
-    - **本機發布歷史管理中心（支援備份匯出與匯入）**：
-      - 本地保存已發布文件的標題、短網址、提供者標籤與管理金鑰。
-      - 支援從遠端伺服器或 GitHub 倉庫一鍵下架刪除文件。
-      - **跨裝置無縫移轉**：提供「匯出 JSON」與「匯入 JSON（合併 / 覆蓋模式）」功能，更換手機或瀏覽器時輕鬆備份移轉所有發布紀錄與管理金鑰，不怕資料遺失。
+    - **發布歷史與雲端同步管理中心（防裝置遺失 ＆ 跨裝置無縫管理）**：
+      - **跨裝置讀取與同步**：更換手機或電腦時，只要在設定中填入相同的 Cloudflare Worker 網址或 GitHub 倉庫帳號，點擊「🔄 同步雲端清單」，即可將遠端所有曾發布的檔案與網址秒速抓回本地清單，徹底打破單機儲存限制。
+      - **一鍵載入編輯器二次修改（✏️ 匯入編輯）**：在發布歷史卡片上點擊「✏️ 匯入編輯」，系統自動由雲端抓回該 HTML 並完整還原 Markdown 原始碼（支援密碼解鎖），立即載入編輯器修改與再發布。
+      - **防遺失之遠端硬刪除（下架機制）**：透過雲端同步機制，任何填入相同設定的裝置皆可直接點擊「🗑️ 刪除」，自 Cloudflare KV 或 GitHub 倉庫永久刪除下架，不再有舊手機遺失無法清理已發布網址的困擾。
+      - **可選管理者金鑰防護 (ADMIN_TOKEN)**：支援在 Cloudflare Worker 設定 `ADMIN_TOKEN` 環境變數，加強隱私防護，僅授權填有管理金鑰之裝置能調取完整列表或批次管理。
+      - **本機備份移轉**：保留「匯出 JSON」與「匯入 JSON（合併 / 覆蓋模式）」備份功能，換手機時亦可離線移轉。
 
-15. **📥 萬能反向匯入與狀態還原（網頁網址 ＋ 密碼保護解密 ＋ PDF 結構化提取 ＋ 雙向無損生態系）**
+15. **📥 萬能反向匯入與狀態還原（網頁網址 ＋ 密碼保護解密 ＋ ☁️ 雲端分享庫 ＋ PDF 結構化提取 ＋ 雙向無損生態系）**
     - **已發布網頁網址一鍵逆向還原**：
       - 支援直接輸入或貼上已發布之網頁網址（如 Cloudflare Workers 或 GitHub Pages）。
       - 自動抓取線上內容，智慧逆向解析為原始 Markdown 內容、各級標題、提示方塊（`[!NOTE]` 等）、GFM 表格與 Mermaid 圖表代碼。
+    - **☁️ 雲端分享庫即時選取匯入**：
+      - 匯入彈窗新增獨立「☁️ 雲端分享庫」標籤頁，一覽您當前設定的 Cloudflare Worker 或 GitHub 倉庫所有線上發布文件。
+      - 支援即時搜尋關鍵字與一鍵「✏️ 載入此文件」，無需手動複製網址即可秒速拉取至編輯器。
     - **零知識加密網頁解鎖 (Client-Side AES-256-GCM Decryption)**：
       - 自動辨識密碼保護網頁，彈出密碼輸入框；密碼錯誤時提供直覺的搖晃動畫提示。
       - 透過瀏覽器 Web Crypto API 於本地毫秒級解密，立即還原加密前的編輯狀態。
@@ -178,10 +183,14 @@ MD2HTML 提供全方位的「反向匯入」能力，無論是已線上發布的
    - 點擊 **「⚡ 解析內容」**。
    - **若為密碼保護網頁**：系統將自動切換為密碼輸入視圖，輸入密碼後點擊 **「解鎖並解析」** 即可。
    - **若遇到同源政策 (CORS) 限制**：可點擊展開「**手動貼上 HTML 原始碼**」區塊，將網頁原始碼貼入後點擊「解析貼上的原始碼」，完全不受跨域限制。
-3. **方式二：匯入本機 PDF 或 HTML 檔案**：
+3. **方式二：直接由「☁️ 雲端分享庫」挑選載入**：
+   - 切換至「☁️ 雲端分享庫」分頁，系統會顯示您目前已同步的線上發布文章清單。
+   - 點擊「🔄 同步雲端清單」可即刻向 Cloudflare 或 GitHub 抓取最新檔案。
+   - 找到欲修改的文件，點擊「✏️ 載入此文件」即可直接載入編輯器，免手動輸入網址！
+4. **方式三：匯入本機 PDF 或 HTML 檔案**：
    - 切換至「📑 本機檔案 / PDF」分頁，點擊選取檔案；或**直接將 `.pdf` / `.html` 檔案拖放進瀏覽器任意區域**。
    - 系統將自動調用 `pdf.js` 解析文字層並智慧推導標題階層，或提取 HTML 中繼資料。
-4. **預覽並載入編輯器**：
+5. **預覽並載入編輯器**：
    - 解析完成後，彈窗下方會顯示標題、字數、還原模式（無損中繼資料還原 / 智慧轉譯）與 Markdown 前導預覽。
    - 點擊 **「載入至編輯器進行修改」**，即可立即套用至 Markdown 編輯區、大綱與預覽畫面，並隨時支援 `Ctrl + Z` 復原。
 
@@ -221,6 +230,12 @@ MD2HTML 支援兩種完全免費且免綁信用卡的線上短網址發布服務
    - 複製您的 Worker 網址（例如 `https://mdshares.xxx.workers.dev`）。
    - 在 MD2HTML 點擊頂部或選單中的「🌐 線上發布與分享」➔ 選擇「☁️ Cloudflare KV」➔ 貼上網址即可開始發布！
 
+##### 🔄 跨裝置讀取、修改與遠端下架管理（防丟失機制）：
+- **跨裝置讀取歷史**：更換新手機或電腦時，只需在 MD2HTML 填入相同的 Worker 網址，進入「發布歷史」點擊「🔄 同步雲端清單」，即可將遠端所有曾發布的文件與短網址完整讀入清單！
+- **一鍵載入編輯器二次修改**：在發布歷史卡片或匯入彈窗「☁️ 雲端分享庫」中，直接點選「✏️ 匯入編輯 / 載入此文件」，系統即會由雲端抓取 HTML 還原為 Markdown 原始碼（支援密碼解鎖），方便隨時編輯更新並重新發布。
+- **遠端下架硬刪除**：任何填入相同 Worker 網址的裝置皆可直接點擊「🗑️ 刪除」，將文件從 Cloudflare KV 永久下架，徹底解決舊裝置遺失無法清除已發布網址的問題。
+- **可選管理者金鑰 (`ADMIN_TOKEN`)**：若希望加強隱私，防止他人隨意瀏覽您的 Worker 全部清單，可在 Cloudflare Worker 的 `Settings` ➔ `Variables and Secrets` ➔ 新增環境變數 `ADMIN_TOKEN`（自訂密碼），並在 MD2HTML 發布設定中填入對應金鑰即可。
+
 ---
 
 #### 方案二：GitHub REST API + GitHub Pages（免架伺服器，純前端發布）
@@ -247,6 +262,11 @@ MD2HTML 支援兩種完全免費且免綁信用卡的線上短網址發布服務
 4. **填入 MD2HTML 即可使用**：
    - 在 MD2HTML 點擊「🌐 線上發布與分享」➔ 點選「🐙 GitHub Pages」。
    - 系統會自動辨識並帶入您的 GitHub 使用者名稱（亦可手動填寫），貼上剛剛複製的 Token 與倉庫名稱，即可開始發布！
+
+##### 🔄 跨裝置讀取、修改與 GitHub 倉庫硬刪除：
+- **跨裝置讀取歷史**：任何裝置只要填入相同的 GitHub 帳號與倉庫名稱，點擊「🔄 同步雲端清單」，前端會直接透過 GitHub API 掃描倉庫內所有已發布的 HTML 文件並拉取回清單。
+- **一鍵載入編輯修改**：在清單中點擊「✏️ 匯入編輯」，免去手動找連結，自動從 GitHub Pages 還原 Markdown 原始碼並載入編輯器。
+- **遠端倉庫硬刪除**：即便更換裝置，只要填有具備 Contents 權限的 GitHub Token，即可在發布歷史中直接點擊「🗑️ 刪除」，系統會透過 GitHub API 自動刪除倉庫中的 HTML 檔案，立即下架失效。
 
 ---
 
@@ -447,9 +467,9 @@ Welcome to the **Universal Markdown Editor Converter**! A visually stunning, hig
           - **Progress Persistence & Resume**: Stores listening progress in `localStorage` per document. Next time you open the document, resume listening from where you stopped with one click!
           - Accessible both directly within the AI Beautify preview and from the main Reading Layout toolbar.
 
-14. **🌐 Online Publishing & Universal Sharing (Dual-Provider + Zero-Knowledge Client-Side Encryption + Local History Backup)**
+14. **🌐 Online Publishing & Universal Sharing (Dual-Provider + Zero-Knowledge Client-Side Encryption + Cross-Device Cloud Sync + 1-Click Import to Edit + Remote Hard Delete)**
     - **Dual Free Providers (100% Free, Zero Credit Card Required)**:
-      - ☁️ **Cloudflare Workers KV**: Instant global edge distribution, 8-character random short URLs, lightning-fast rendering.
+      - ☁️ **Cloudflare Workers KV**: Instant global edge distribution, 8-character random short URLs, high privacy, lightning-fast rendering.
       - 🐙 **GitHub REST API + GitHub Pages**: 100% serverless, direct client-side publishing pushing directly to your public repository.
       - Configure either or both providers; seamlessly switch between them directly on the publishing dialog!
     - **Zero-Knowledge Client-Side Password Protection (AES-256-GCM)**:
@@ -459,15 +479,20 @@ Welcome to the **Universal Markdown Editor Converter**! A visually stunning, hig
     - **Universal Sharing & Dynamic QR Code**:
       - One-click copy for custom short URLs; invokes the native Web Share API to send links straight to LINE, WhatsApp, or any mobile messaging app.
       - Dynamically renders high-resolution QR codes for immediate mobile camera scanning.
-    - **Local Publishing History & Cloud Deletion**:
-      - Stores published article history, provider tags, creation timestamps, and management secret tokens in `localStorage`.
-      - Delete or take down published files from Cloudflare KV or GitHub Pages with a single click.
-      - **JSON Export & Import (Merge / Replace)**: Easily backup and restore your publishing history and deletion keys across different mobile devices or browsers!
+    - **Publishing History & Cloud Sync Management Center (Anti-Loss & Cross-Device Management)**:
+      - **Cross-Device Reading & Synchronization**: When switching phones or computers, simply enter the same Cloudflare Worker URL or GitHub repository account and click **"🔄 Sync Cloud List"** to instantly pull all previously published articles and URLs into your local history list.
+      - **1-Click Load into Editor for Secondary Modification (✏️ Import & Edit)**: Click **"✏️ 匯入編輯 (Import to Edit)"** on any card in the history list to automatically fetch the HTML, restore lossless Markdown source code (with password prompt support), and load it into the editor for instant modification and re-publishing.
+      - **Remote Hard Deletion (Takedown Mechanism)**: Devices with the same configuration can directly click **"🗑️ 刪除 (Delete)"** to permanently remove files from Cloudflare KV or GitHub Pages, eliminating orphaned links when devices are replaced or lost.
+      - **Optional Admin Token Protection (`ADMIN_TOKEN`)**: Optionally configure an `ADMIN_TOKEN` environment variable in Cloudflare Worker settings to ensure only authorized devices with the matching key can list all shares or delete files.
+      - **Local Backup & Transfer**: Preserves "Export JSON" and "Import JSON (Merge / Replace)" backup utilities for offline migration.
 
-15. **📥 Universal Reverse Import & State Restoration (Web URLs + Password Decryption + PDF Structural Extraction + Lossless Ecosystem)**
+15. **📥 Universal Reverse Import & State Restoration (Web URLs + Password Decryption + ☁️ Cloud Shared Library + PDF Structural Extraction + Lossless Ecosystem)**
     - **Published Webpage Reverse Restoration**:
       - Paste any live URL (e.g. Cloudflare Workers or GitHub Pages).
       - Automatically fetches and parses pages back to Markdown, heading trees, callouts (`[!NOTE]`), GFM tables, and Mermaid diagram code.
+    - **☁️ Cloud Shared Library Instant Selection & Import**:
+      - Dedicated "☁️ 雲端分享庫 (Cloud Shares)" tab inside the Import Modal displays all published files from your currently configured Cloudflare Worker or GitHub repository.
+      - Supports live keyword filtering and 1-click **"✏️ 載入此文件 (Load this Document)"** to pull documents into the editor without copying URLs manually.
     - **Zero-Knowledge Password Decryption (Client-Side AES-256-GCM)**:
       - Automatically detects password-protected documents and prompts for a password with a shake animation for invalid attempts.
       - Decrypts client-side using the browser's Web Crypto API in milliseconds.
@@ -499,9 +524,13 @@ MD2HTML provides end-to-end reverse import capabilities to bring published pages
    - Click **"⚡ 解析內容 (Parse Content)"**.
    - **Password-Protected Pages**: Enter the password and click **"解鎖並解析 (Unlock & Parse)"**.
    - **CORS Blocked Pages**: Expand the **"手動貼上 HTML 原始碼 (Paste HTML Manually)"** section to parse raw source code directly.
-3. **Option B: Import Local PDF or HTML Files**:
+3. **Option B: Select from "☁️ 雲端分享庫 (Cloud Shares)"**:
+   - Switch to the "☁️ 雲端分享庫" tab to browse all synchronized online articles.
+   - Click **"🔄 同步雲端清單 (Sync Cloud List)"** to retrieve the latest files from Cloudflare KV or GitHub Pages.
+   - Click **"✏️ 載入此文件 (Load this Document)"** to directly load it into the editor!
+4. **Option C: Import Local PDF or HTML Files**:
    - Switch to the "📑 本機檔案 / PDF" tab to select a file, or **simply drag and drop `.pdf` / `.html` files directly into the window**.
-4. **Preview and Load into Editor**:
+5. **Preview and Load into Editor**:
    - Inspect the detected title, word count, restoration mode (Lossless vs Smart Conversion), and preview snippet.
    - Click **"載入至編輯器進行修改 (Load into Editor)"** to begin editing with full Undo (`Ctrl + Z`) support.
 
@@ -541,6 +570,12 @@ MD2HTML supports two free publishing channels. You may configure either one or b
    - Copy your Worker URL (e.g. `https://mdshares.xxx.workers.dev`).
    - In MD2HTML, click **"🌐 Online Publishing & Sharing"** in the top bar or menu ➔ Select **`Cloudflare KV`** ➔ Paste the Worker URL to publish!
 
+##### 🔄 Cross-Device Reading, Modification & Remote Takedown (Anti-Loss):
+- **Cross-Device Sync**: Simply configure the same Worker URL on any new device and click **"🔄 同步雲端清單 (Sync Cloud List)"** in Publishing History to retrieve all remote published documents!
+- **1-Click Import & Edit**: Click **"✏️ 匯入編輯 (Import to Edit)"** to instantly fetch HTML and restore Markdown code for modification and republishing.
+- **Remote Hard Deletion**: Delete files directly from Cloudflare KV from any configured device, ensuring files can always be taken down even if the original device is lost.
+- **Optional Admin Token (`ADMIN_TOKEN`)**: To prevent unauthorized viewers from listing all articles on your Worker, add an environment variable `ADMIN_TOKEN` under Worker **Settings** ➔ **Variables and Secrets**, and enter the same key in MD2HTML.
+
 ---
 
 #### Option 2: GitHub REST API + GitHub Pages (100% Serverless)
@@ -567,6 +602,11 @@ MD2HTML supports two free publishing channels. You may configure either one or b
 4. **Enter into MD2HTML**:
    - In MD2HTML, click **"🌐 Online Publishing & Sharing"** ➔ Select **`GitHub Pages`**.
    - Your username will be auto-detected (or entered manually). Paste the token and repository name to start publishing!
+
+##### 🔄 Cross-Device Reading, Modification & Repository Hard Delete:
+- **Cross-Device Sync**: Any device configuring the same GitHub owner and repository can click **"🔄 同步雲端清單 (Sync Cloud List)"** to pull all published files via GitHub REST API.
+- **1-Click Import & Edit**: Click **"✏️ 匯入編輯 (Import to Edit)"** to pull the HTML directly from GitHub Pages and restore into the Markdown editor.
+- **Repository Hard Deletion**: Devices with a valid GitHub token can click **"🗑️ 刪除 (Delete)"** to permanently delete the HTML file from the repository via GitHub API.
 
 ---
 

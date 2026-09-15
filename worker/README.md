@@ -43,6 +43,15 @@ MD2HTML 支援 **兩種完全免費且免綁信用卡** 的線上短網址發布
    - 複製您的 Worker 網址（例如 `https://md2html-publish-worker.xxx.workers.dev`）。
    - 在 MD2HTML 點擊「🌐線上發布與分享」➔ 選擇「Cloudflare KV」➔ 填入網址即可！
 
+### 🔄 跨裝置同步與下架管理（防丟失機制）
+
+- **跨裝置同步**：更換手機或電腦時，只要在 MD2HTML 填入同一個 Worker 網址，點擊「發布歷史」中的「🔄 同步雲端清單」，即可自動讀取該 Worker 上所有發布過的文件與網址！
+- **一鍵匯入編輯**：在清單中點擊「✏️ 匯入編輯」，系統會自動從雲端抓取 HTML 還原為 Markdown，方便立即修改與重新發布。
+- **遠端刪除下架**：在任何裝置皆可直接點擊「🗑️ 刪除」將文件從 Cloudflare KV 永久下架。
+- **可選的管理者金鑰（選填）**：
+  - 若希望進一步加強隱私，可至 Worker 的 **Settings** ➔ **Variables and Secrets** ➔ 新增一個 Environment Variable 名稱為 `ADMIN_TOKEN`，值為您自訂的密鑰密碼。
+  - 設定後，只有在 MD2HTML 填入相應管理金鑰的裝置才能查詢清單與批次管理；一般只知道單篇文章分享網址的訪客將無法讀取全文清單。
+
 ---
 
 ## 方案二：GitHub REST API + GitHub Pages 設定（純前端免伺服器）

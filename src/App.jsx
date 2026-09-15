@@ -7073,6 +7073,7 @@ ${JSON.stringify({
       <PublishHistoryModal
         isOpen={showPublishHistoryModal}
         onClose={() => setShowPublishHistoryModal(false)}
+        onApplyImport={handleApplyImport}
         showToast={showToast}
       />
 

@@ -6,9 +6,14 @@ import {
   importPublishHistory,
   deleteFromWorker,
   getSavedWorkerUrl,
+  getSavedWorkerAdminToken,
   deleteFromGitHub,
-  getSavedGitHubConfig
+  getSavedGitHubConfig,
+  getActiveProvider,
+  syncRemoteShares,
+  mergeRemoteSharesIntoHistory
 } from '../utils/publishService';
+import { fetchAndImportFromUrl } from '../utils/importer';
 
 // 解析並取得歷史記錄中更有辨識度的主題與副標題
 export function resolveHistoryItemInfo(item) {
@@ -70,17 +75,23 @@ export function resolveHistoryItemInfo(item) {
   };
 }
 
-export default function PublishHistoryModal({ isOpen, onClose, showToast }) {
+export default function PublishHistoryModal({ isOpen, onClose, showToast, onApplyImport }) {
   if (!isOpen) return null;
-  return <PublishHistoryModalContent onClose={onClose} showToast={showToast} />;
+  return <PublishHistoryModalContent onClose={onClose} showToast={showToast} onApplyImport={onApplyImport} />;
 }
 
-function PublishHistoryModalContent({ onClose, showToast }) {
+function PublishHistoryModalContent({ onClose, showToast, onApplyImport }) {
   const [history, setHistory] = useState(() => getPublishHistory());
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingId, setDeletingId] = useState(null);
+  const [importingId, setImportingId] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [importPendingData, setImportPendingData] = useState(null); // Data pending user merge/replace decision
   const fileInputRef = useRef(null);
+
+  const activeProvider = getActiveProvider();
+  const workerUrl = getSavedWorkerUrl();
+  const ghConfig = getSavedGitHubConfig();
 
   const refreshHistory = () => {
     setHistory(getPublishHistory());
@@ -108,6 +119,70 @@ function PublishHistoryModalContent({ onClose, showToast }) {
     });
   };
 
+  // Sync with Remote Cloud (Cloudflare KV or GitHub Pages repo)
+  const handleSyncRemote = async () => {
+    setIsSyncing(true);
+    const providerName = activeProvider === 'github' ? 'GitHub 倉庫' : 'Cloudflare Workers KV';
+    showToast(`⏳ 正在同步 ${providerName} 的雲端已發布清單...`, 'info');
+
+    try {
+      const { items } = await syncRemoteShares({ provider: activeProvider });
+      const result = mergeRemoteSharesIntoHistory(items);
+      refreshHistory();
+      showToast(
+        `🎉 成功同步！在雲端發現 ${items.length} 筆檔案（新增 ${result.newCount} 筆，共 ${result.totalCount} 筆）`,
+        'success'
+      );
+    } catch (err) {
+      console.warn('Sync failed:', err);
+      showToast(`⚠️ 同步失敗：${err.message}`, 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Import published document from remote directly into the MD2HTML editor
+  const handleImportToEditor = async (item) => {
+    if (!onApplyImport) {
+      showToast('⚠️ 尚未提供編輯器匯入處理程序', 'warning');
+      return;
+    }
+
+    setImportingId(item.id);
+    const { title: displayTitle } = resolveHistoryItemInfo(item);
+    showToast(`⏳ 正在從雲端載入《${displayTitle}》並還原 Markdown...`, 'info');
+
+    try {
+      let res = await fetchAndImportFromUrl(item.url, item.password || null);
+      if (res.needsPassword) {
+        const inputPass = window.prompt(`🔒 此文件受密碼保護，請輸入閱讀密碼以解密匯入：`);
+        if (!inputPass) {
+          showToast('已取消匯入', 'info');
+          setImportingId(null);
+          return;
+        }
+        res = await fetchAndImportFromUrl(item.url, inputPass.trim());
+      }
+
+      if (res && res.success && res.markdown) {
+        onApplyImport({
+          markdown: res.markdown,
+          title: res.title || displayTitle,
+          theme: res.theme || 'light'
+        });
+        onClose();
+        showToast(`🎉 已成功將《${res.title || displayTitle}》載入編輯器，可直接修改內容！`, 'success');
+      } else {
+        throw new Error('無法解析 Markdown 內容');
+      }
+    } catch (err) {
+      console.error('Import to editor failed:', err);
+      showToast(`❌ 匯入失敗：${err.message}`, 'error');
+    } finally {
+      setImportingId(null);
+    }
+  };
+
   // Takedown / Delete handler supporting both Cloudflare and GitHub
   const handleDelete = async (item) => {
     const isGitHub = item.provider === 'github';
@@ -122,14 +197,14 @@ function PublishHistoryModalContent({ onClose, showToast }) {
 
     try {
       if (isGitHub) {
-        const ghConfig = getSavedGitHubConfig();
-        const token = ghConfig.token;
-        const owner = item.owner || ghConfig.owner;
-        const repo = item.repo || ghConfig.repo || 'html-shares';
+        const gh = getSavedGitHubConfig();
+        const token = gh.token;
+        const owner = item.owner || gh.owner;
+        const repo = item.repo || gh.repo || 'html-shares';
         const path = item.path || `${item.id}.html`;
 
         if (!token || !owner) {
-          throw new Error('未偵測到有效的 GitHub Token 或帳號資訊，請至設定中補齊！');
+          throw new Error('未偵測到有效的 GitHub Token 或帳號資訊，請至發布設定中補齊！');
         }
 
         await deleteFromGitHub({
@@ -140,10 +215,13 @@ function PublishHistoryModalContent({ onClose, showToast }) {
           sha: item.sha
         });
       } else {
-        const workerUrl = getSavedWorkerUrl();
-        if (workerUrl && item.secret) {
-          await deleteFromWorker(workerUrl, item.id, item.secret);
+        const wUrl = getSavedWorkerUrl();
+        if (!wUrl) {
+          throw new Error('未偵測到 Cloudflare Worker 網址，請至發布設定中確認！');
         }
+        const adminToken = getSavedWorkerAdminToken();
+        const effectiveSecret = item.secret || adminToken;
+        await deleteFromWorker(wUrl, item.id, effectiveSecret);
       }
 
       removePublishHistoryItem(item.id);
@@ -151,11 +229,11 @@ function PublishHistoryModalContent({ onClose, showToast }) {
       showToast(`✅ 《${displayTitle}》已成功從 ${providerName} 下架刪除！`, 'success');
     } catch (err) {
       console.warn('Delete failed:', err);
-      const removeLocal = window.confirm(`雲端回報：${err.message}\n\n是否仍要從本機記錄中移除此項目？`);
+      const removeLocal = window.confirm(`雲端回報：${err.message}\n\n是否仍要從清單中移除此項目？`);
       if (removeLocal) {
         removePublishHistoryItem(item.id);
         refreshHistory();
-        showToast('已從本機記錄中移除。', 'info');
+        showToast('已從清單中移除。', 'info');
       }
     } finally {
       setDeletingId(null);
@@ -251,10 +329,10 @@ function PublishHistoryModalContent({ onClose, showToast }) {
             </div>
             <div>
               <h3 className="font-extrabold text-slate-800 dark:text-slate-100 text-base sm:text-lg">
-                本機發布歷史管理
+                發布歷史與雲端同步管理
               </h3>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                管理已發布的短網址與刪除金鑰，支援 Cloudflare KV 與 GitHub Pages 跨裝置匯出/匯入
+                跨裝置讀取、修改與刪除已發布的文件，支援 Cloudflare KV 與 GitHub Pages 遠端檔案即時同步
               </p>
             </div>
           </div>
@@ -269,9 +347,36 @@ function PublishHistoryModalContent({ onClose, showToast }) {
           </button>
         </div>
 
-        {/* Action Toolbar (Export / Import / Search) */}
+        {/* Current Provider Endpoint Banner */}
+        <div className="px-5 py-2 bg-indigo-50/40 dark:bg-indigo-950/30 border-b border-indigo-100/60 dark:border-indigo-900/40 flex flex-wrap items-center justify-between gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-slate-700 dark:text-slate-300">目前雲端：</span>
+            {activeProvider === 'github' ? (
+              <span className="font-mono text-purple-600 dark:text-purple-400 font-bold">
+                🐙 {ghConfig.owner ? `${ghConfig.owner}/${ghConfig.repo || 'html-shares'}` : '尚未設定 GitHub 帳號'}
+              </span>
+            ) : (
+              <span className="font-mono text-blue-600 dark:text-blue-400 font-bold truncate max-w-xs sm:max-w-md">
+                ☁️ {workerUrl || '尚未設定 Cloudflare Worker 網址'}
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] text-slate-400">點擊「同步雲端清單」即可抓取遠端全部檔案與網址</span>
+        </div>
+
+        {/* Action Toolbar (Sync / Export / Import / Search) */}
         <div className="px-5 py-3 border-b border-slate-200/70 dark:border-slate-800/80 bg-slate-50/30 dark:bg-slate-900/30 flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleSyncRemote}
+              disabled={isSyncing}
+              className="px-3 py-1.5 rounded-lg border border-indigo-300 dark:border-indigo-700 bg-indigo-50/90 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+              title={`從 ${activeProvider === 'github' ? 'GitHub 倉庫' : 'Cloudflare Workers KV'} 同步所有已發布文件`}
+            >
+              <span className={isSyncing ? 'animate-spin' : ''}>🔄</span>
+              <span>{isSyncing ? '同步中...' : '同步雲端清單'}</span>
+            </button>
+
             <button
               onClick={handleExport}
               disabled={history.length === 0}
@@ -393,6 +498,13 @@ function PublishHistoryModalContent({ onClose, showToast }) {
                           🌐 公開
                         </span>
                       )}
+
+                      {/* Synced Badge */}
+                      {item.isSynced && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60">
+                          ☁️ 雲端同步
+                        </span>
+                      )}
                     </div>
 
                     {/* Action buttons */}
@@ -415,6 +527,15 @@ function PublishHistoryModalContent({ onClose, showToast }) {
                         <span>🔗</span>
                         <span>開啟</span>
                       </a>
+                      <button
+                        onClick={() => handleImportToEditor(item)}
+                        disabled={importingId === item.id}
+                        className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
+                        title="將此已發布文件直接載入編輯器進行修改"
+                      >
+                        <span>{importingId === item.id ? '⏳' : '✏️'}</span>
+                        <span>匯入編輯</span>
+                      </button>
                       <button
                         onClick={() => handleDelete(item)}
                         disabled={isDeleting}
