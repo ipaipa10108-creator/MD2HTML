@@ -14,7 +14,7 @@
     "preinstall": "npx only-allow pnpm"
   },
   "dependencies": {
-    "dompurify": "^3.4.10",
+    "dompurify": "^3.4.17",
     "highlight.js": "^11.11.1",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
@@ -38,7 +38,16 @@
     "globals": "^17.6.0",
     "postcss": "^8.5.15",
     "tailwindcss": "^3.4.19",
-    "vite": "^8.0.12"
+    "vite": "^8.1.6"
+  },
+  "engines": {
+    "node": ">=22.23.4"
+  },
+  "pnpm": {
+    "overrides": {
+      "dompurify": ">=3.4.17",
+      "zod": ">=4.6.6"
+    }
   },
   "packageManager": "pnpm@10.33.0"
 }

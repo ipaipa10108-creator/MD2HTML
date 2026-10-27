@@ -1,6 +1,6 @@
 name = "md2html-publish-worker"
 main = "worker.js"
-compatibility_date = "2024-09-01"
+compatibility_date = "2026-10-25"
 
 # Bind a KV Namespace named 'MY_KV' (100% Free, No credit card required!)
 # To create via CLI: npx wrangler kv namespace create MD_SHARES
