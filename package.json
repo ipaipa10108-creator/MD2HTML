@@ -43,7 +43,6 @@
     "node": ">=22.23.4"
   },
   "overrides": {
-    "dompurify": ">=3.4.17",
     "zod": ">=4.6.6"
   },
   "packageManager": "pnpm@10.33.0"
